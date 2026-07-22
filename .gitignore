@@ -1,0 +1,27 @@
+# JavaScript / Bun
+node_modules/
+.bun-cache/
+
+# Frontend and Tauri build outputs
+dist/
+release/
+src-tauri/target/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# Local RWR assets used for manual compatibility checks
+/*.xml
+
+# Legacy Python artifacts (must not return)
+.venv/
+__pycache__/
+.pytest_cache/
