@@ -45,8 +45,6 @@ bun run build
 
 `bun run build` 会安装锁定依赖、执行 JavaScript 回归测试与 Vue 类型检查、构建前端、调用系统 Rust 构建 Tauri，并将便携程序和平台安装包复制到 `release/`。最终用户无需安装 Bun、Rust 或编译工具。
 
-XML 兼容边界与发布前检查见 [兼容契约](docs/compatibility-contract.zh-CN.md)。
-
 ## 许可
 
 本项目采用 [GNU General Public License v3.0](LICENSE)。你可以依照 GPL-3.0 使用、研究、修改和再分发本项目；分发修改版本时需要继续提供相应源代码并保留相同许可。
