@@ -27,6 +27,7 @@ import type {
 } from '../core/types';
 import { desktopBridge } from '../platform/desktop-api';
 import { CharacterPreviewController } from './character-preview';
+import { FileDialogGate } from './file-dialog-gate';
 import { isTextEntryTarget, releasePressedActions } from './focus-policy';
 import {
   normalizeScreenRect,
@@ -85,6 +86,7 @@ const saveAsBtn = element<HTMLButtonElement>('#saveAsBtn');
 const skeletonToggle = element<HTMLInputElement>('#skeletonToggle');
 const modelFileInput = element<HTMLInputElement>('#modelFileInput');
 const animationFileInput = element<HTMLInputElement>('#animationFileInput');
+const fileDialogInteractionGuard = element<HTMLDivElement>('#fileDialogInteractionGuard');
 const animationSelect = element<HTMLSelectElement>('#animationSelect');
 const animationPlayBtn = element<HTMLButtonElement>('#animationPlayBtn');
 const animationTime = element<HTMLInputElement>('#animationTime');
@@ -144,6 +146,11 @@ let activeAnimation: RwrAnimation | null = null;
 let animationPlaying = false;
 let animationElapsed = 0;
 let animationRig: VoxelAnimationRig | null = null;
+const fileDialogGate = new FileDialogGate((active) => {
+  fileDialogInteractionGuard.classList.toggle('hidden', !active);
+  fileDialogInteractionGuard.setAttribute('aria-hidden', String(!active));
+  document.documentElement.classList.toggle('file-dialog-open', active);
+});
 let animationDirty = false;
 let currentAnimationFileName = 'animations.xml';
 let selectedFrameIndex = 0;
@@ -1231,13 +1238,28 @@ async function openFile(kind: 'model' | 'animation'): Promise<void> {
     !window.confirm('当前动画有未导出修改。确定放弃并载入其他动画文件吗？')
   )
     return;
+  if (!fileDialogGate.tryOpen()) return;
+  releaseCameraInput();
+  closeColorPicker();
+  closeFileMenu();
   if (desktopBridge.isAvailable()) {
-    const result = await desktopBridge.openTextFile(kind);
-    if (!result) return;
-    if (kind === 'model') loadModelText(result.text, result.name, result.path);
-    else loadAnimationText(result.text, result.name);
+    try {
+      const result = await desktopBridge.openTextFile(kind);
+      if (!result) return;
+      if (kind === 'model') loadModelText(result.text, result.name, result.path);
+      else loadAnimationText(result.text, result.name);
+    } finally {
+      fileDialogGate.close();
+    }
   } else {
-    (kind === 'model' ? modelFileInput : animationFileInput).click();
+    const input = kind === 'model' ? modelFileInput : animationFileInput;
+    try {
+      input.value = '';
+      input.click();
+    } catch (error) {
+      fileDialogGate.close();
+      throw error;
+    }
   }
 }
 
@@ -1497,12 +1519,16 @@ async function saveAnimationFile(): Promise<void> {
 }
 
 async function readInputFile(input: HTMLInputElement, kind: 'model' | 'animation'): Promise<void> {
-  const file = input.files?.[0];
-  if (!file) return;
-  const text = await file.text();
-  if (kind === 'model') loadModelText(text, file.name);
-  else loadAnimationText(text, file.name);
-  input.value = '';
+  try {
+    const file = input.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    if (kind === 'model') loadModelText(text, file.name);
+    else loadAnimationText(text, file.name);
+  } finally {
+    input.value = '';
+    fileDialogGate.close();
+  }
 }
 
 function updateAnimationUi(): void {
@@ -1939,6 +1965,8 @@ undoBtn.addEventListener('click', undo);
 redoBtn.addEventListener('click', redo);
 modelFileInput.addEventListener('change', () => void readInputFile(modelFileInput, 'model'));
 animationFileInput.addEventListener('change', () => void readInputFile(animationFileInput, 'animation'));
+modelFileInput.addEventListener('cancel', () => fileDialogGate.close());
+animationFileInput.addEventListener('cancel', () => fileDialogGate.close());
 element('#clearSelectionBtn').addEventListener('click', () => {
   selectedIds.clear();
   rebuildVoxelMesh();
@@ -2224,6 +2252,11 @@ function runShortcutAction(action: ShortcutAction): void {
 window.addEventListener(
   'keydown',
   (event) => {
+    if (fileDialogGate.isOpen()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     if (event.key === 'Shift') shiftHeld = true;
     const target = event.target as HTMLElement;
     if (event.key === 'Escape') {

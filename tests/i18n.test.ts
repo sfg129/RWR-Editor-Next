@@ -6,6 +6,7 @@ describe('runtime localization', () => {
     expect(translate('打开模型')).toBe('Open Model');
     expect(translate('已选择 12 个体素')).toBe('12 voxels selected');
     expect(translate('第 3 帧 · 0.250s')).toBe('Frame 3 · 0.250s');
+    expect(translate('正在等待文件选择…')).toBe('Waiting for file selection…');
     expect(translate('柔和')).toBe('Soft');
     expect(translate('固定镜头 · 左键拖动旋转人物模型')).toBe(
       'Fixed camera · Left drag rotates the character',

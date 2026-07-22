@@ -13,6 +13,7 @@ const englishMessages: Record<string, string> = {
   选择目录和文件名: 'Choose a folder and file name',
   打开模型: 'Open Model',
   载入动画: 'Load Animation',
+  '正在等待文件选择…': 'Waiting for file selection…',
   撤销: 'Undo',
   重做: 'Redo',
   编辑工具: 'Editing tools',

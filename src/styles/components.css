@@ -1662,6 +1662,37 @@ input[type='range'] {
   padding-top: 13px;
   border-top: 1px solid var(--border);
 }
+.file-dialog-interaction-guard {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  background: rgba(5, 6, 8, 0.5);
+  color: var(--text);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(2px);
+  cursor: wait;
+}
+.file-dialog-interaction-guard.hidden {
+  display: none;
+}
+.file-dialog-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: file-dialog-spin 0.75s linear infinite;
+}
+@keyframes file-dialog-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .modal-backdrop {
   position: fixed;
   inset: 0;

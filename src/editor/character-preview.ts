@@ -292,12 +292,11 @@ export class CharacterPreviewController {
           return;
         }
         if (event.key === 'Shift') this.shiftHeld = true;
-        if (this.fixedCameraInput.checked) return;
         const action = this.cameraAction(event.code);
         if (!action || isTextEntryTarget(event.target)) return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        this.pressed.add(action);
+        if (!this.fixedCameraInput.checked) this.pressed.add(action);
       },
       { capture: true },
     );
