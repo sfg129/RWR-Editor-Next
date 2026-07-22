@@ -218,10 +218,20 @@ const englishMessages: Record<string, string> = {
   预览光照: 'Preview lighting',
   体素渲染尺寸: 'Voxel render size',
   固定镜头: 'Fixed camera',
+  '固定镜头 · 左键拖动旋转人物模型': 'Fixed camera · Left drag rotates the character',
   固定后禁用镜头移动左键拖动可旋转人物模型:
     'Fixed mode disables camera movement; left drag rotates the character.',
   导出预览设定到剪贴板: 'Copy Preview Settings',
   参数用于确定后续固定的游戏化预览视角: 'These parameters describe the fixed in-game-style preview camera.',
+  请先载入人物模型再打开人物效果预览: 'Load a character model before opening the character preview.',
+  当前模型没有骨骼无法播放人物预览动画:
+    'The current model has no skeleton and cannot play preview animations.',
+  当前模型尚未绑定体素与骨骼请先完成骨骼绑定:
+    'The current model has no voxel-to-skeleton bindings. Bind it before opening the preview.',
+  当前系统不允许写入剪贴板: 'The current system does not allow clipboard access.',
+  无法写入剪贴板: 'Could not write to the clipboard.',
+  预览设定已写入剪贴板可以直接粘贴发送: 'Preview settings copied to the clipboard and ready to paste.',
+  人物预览设定已复制到剪贴板: 'Character preview settings copied to the clipboard.',
   '工具：选择': 'Tool: Select',
   '工具：雕刻': 'Tool: Sculpt',
   '工具：绘色': 'Tool: Paint',
@@ -265,8 +275,10 @@ const patterns: Array<[RegExp, string]> = [
   [/^撤销 \((.*)\)$/, 'Undo ($1)'],
   [/^重做 \((.*)\)$/, 'Redo ($1)'],
   [/^已为 (\d+) 个体素重新绑定骨骼$/, 'Rebound $1 voxels to the skeleton'],
-  [/^(\d+) 个已绑定体素正在跟随 (.*) 动画$/, '$1 bound voxels are following the $2 animation.'],
-  [/^模型有 (\d+) 个骨骼点；(.*) 预设提供 (\d+) 个$/, 'Model: $1 bones; $2 preset: $3.'],
+  [/^(\d+) 个已绑定体素正在跟随 (.*) 动画。?$/, '$1 bound voxels are following the $2 animation.'],
+  [/^模型有 (\d+) 个骨骼点；(.*) 预设提供 (\d+) 个。?$/, 'Model: $1 bones; $2 preset: $3.'],
+  [/^内置 (.*) 动画无法读取。?$/, 'The built-in $1 animation could not be loaded.'],
+  [/^人物预览界面元素不存在：(.*)$/, 'Character preview element not found: $1'],
 ];
 
 const textSources = new WeakMap<Text, string>();
@@ -274,6 +286,10 @@ const attributeSources = new WeakMap<Element, Map<string, string>>();
 const translatableAttributes = ['aria-label', 'title', 'placeholder'] as const;
 let language: AppLanguage = 'zh-CN';
 let observer: MutationObserver | null = null;
+
+export function currentLanguage(): AppLanguage {
+  return language;
+}
 
 function normalized(value: string): string {
   return value.trim().replace(/\s+/g, ' ');

@@ -6,6 +6,8 @@ import { sampleAnimationPositions } from '../core/animation/sample-animation';
 import { cameraRelativeMotion } from '../core/camera/camera-motion';
 import { RwrModel, parseAnimations } from '../core/model/rwr-model';
 import type { RwrAnimation, Vec3 } from '../core/types';
+import { currentLanguage } from '../i18n/runtime';
+import { isTextEntryTarget } from './focus-policy';
 
 type NoticeKind = 'success' | 'warning' | 'normal';
 type LightingPreset = 'soft' | 'standard' | 'bright' | 'color';
@@ -314,11 +316,11 @@ export class CharacterPreviewController {
           return;
         }
         if (event.key === 'Shift') this.shiftHeld = true;
-        if (this.fixedCameraInput.checked || (event.target as HTMLElement).closest('input, select, textarea'))
-          return;
+        if (this.fixedCameraInput.checked) return;
         const action = this.cameraAction(event.code);
-        if (!action) return;
+        if (!action || isTextEntryTarget(event.target)) return;
         event.preventDefault();
+        event.stopImmediatePropagation();
         this.pressed.add(action);
       },
       { capture: true },
@@ -569,7 +571,11 @@ export class CharacterPreviewController {
       },
       world: { groundColor: '#4f7d35', skyColor: '#8fb9d0' },
     };
-    const text = `RWR Editor Next 人物模型预览设定\n${JSON.stringify(payload, null, 2)}`;
+    const title =
+      currentLanguage() === 'en'
+        ? 'RWR Editor Next Character Preview Settings'
+        : 'RWR Editor Next 人物模型预览设定';
+    const text = `${title}\n${JSON.stringify(payload, null, 2)}`;
     try {
       await copyText(text);
       this.status.textContent = '预览设定已写入剪贴板，可以直接粘贴发送。';
