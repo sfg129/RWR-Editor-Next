@@ -46,7 +46,16 @@
   letter-spacing: 0.05em;
 }
 .brand small {
+  display: inline-flex;
+  align-items: center;
+  min-height: 16px;
+  margin-top: 3px;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 42%);
   color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 91%);
+  font-size: 0.58rem;
+  line-height: 1;
   letter-spacing: 0.16em;
 }
 
@@ -73,12 +82,13 @@
 .input-style-dialog,
 .decision-dialog,
 .choice-dialog,
+.character-preview-window,
 .input-style-options > button,
 .style-visual,
 .about-card,
-.language-preview,
 .editor-group,
-.check-control {
+.check-control,
+.workspace-module {
   border-radius: 3px;
   box-shadow: none;
 }
@@ -118,7 +128,9 @@ kbd,
 .animation-tabs,
 .animation-tabs button,
 .workspace-icon,
-.workspace-section-title .section-mark,
+.module-code,
+.marquee-mode-menu,
+.marquee-mode-menu button,
 .shortcut-list input,
 .toast {
   border-radius: 2px;
@@ -181,10 +193,6 @@ kbd {
 .warning-note {
   border-radius: 0;
 }
-.future-panel {
-  border-style: solid;
-}
-
 .settings-nav {
   background: #101316;
 }
@@ -202,7 +210,8 @@ kbd {
 .settings-dialog,
 .input-style-dialog,
 .decision-dialog,
-.choice-dialog {
+.choice-dialog,
+.character-preview-window {
   border-top: 3px solid var(--accent);
 }
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   applyPreset,
   applySettingsToDocument,
@@ -10,9 +11,11 @@ import {
   shouldShowInputStyleOnboarding,
 } from '../config/settings';
 import { VoxelAnimationRig } from '../core/animation/animation-rig';
+import { sampleAnimationPositions } from '../core/animation/sample-animation';
 import { cameraRelativeMotion } from '../core/camera/camera-motion';
 import { hsvToRgb, hueFromPoint, rgbToHsv, saturationValueFromPoint } from '../core/color/color-picker';
 import { RwrModel, parseAnimations, serializeAnimations } from '../core/model/rwr-model';
+import { setLanguage } from '../i18n/runtime';
 import type {
   EditorSettings,
   EditorSnapshot,
@@ -23,6 +26,15 @@ import type {
   Voxel,
 } from '../core/types';
 import { desktopBridge } from '../platform/desktop-api';
+import { CharacterPreviewController } from './character-preview';
+import { isTextEntryTarget, releasePressedActions } from './focus-policy';
+import {
+  normalizeScreenRect,
+  rectangleOverlapRatio,
+  resolveMarqueeCompletionTool,
+  type NonMarqueeToolId,
+  type ScreenRect,
+} from './marquee-selection';
 
 function element<T extends Element>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -63,7 +75,7 @@ const greenValue = element<HTMLOutputElement>('#greenValue');
 const blueValue = element<HTMLOutputElement>('#blueValue');
 const sculptMode = element<HTMLSelectElement>('#sculptMode');
 const activeToolLabel = element<HTMLElement>('#activeToolLabel');
-const toolHelp = element<HTMLElement>('#toolHelp');
+const marqueeSelection = element<HTMLDivElement>('#marqueeSelection');
 const deleteSelectionBtn = element<HTMLButtonElement>('#deleteSelectionBtn');
 const rebindBtn = element<HTMLButtonElement>('#rebindBtn');
 const undoBtn = element<HTMLButtonElement>('#undoBtn');
@@ -106,13 +118,15 @@ const settingsModal = element<HTMLDivElement>('#settingsModal');
 const inputStyleModal = element<HTMLDivElement>('#inputStyleModal');
 const unsavedModelModal = element<HTMLDivElement>('#unsavedModelModal');
 const overwriteModal = element<HTMLDivElement>('#overwriteModal');
+const deleteSelectionModal = element<HTMLDivElement>('#deleteSelectionModal');
+const deleteSelectionCount = element<HTMLElement>('#deleteSelectionCount');
 const overwriteConfirmCheck = element<HTMLInputElement>('#overwriteConfirmCheck');
 const confirmOverwriteBtn = element<HTMLButtonElement>('#confirmOverwriteBtn');
 const fileMenuBtn = element<HTMLButtonElement>('#fileMenuBtn');
 const fileMenu = element<HTMLDivElement>('#fileMenu');
 const lightingQuickSelect = element<HTMLSelectElement>('#lightingQuickSelect');
-const toolModeTitle = element<HTMLElement>('#toolModeTitle');
-const toolModeHint = element<HTMLElement>('#toolModeHint');
+const characterPreviewModal = element<HTMLDivElement>('#characterPreviewModal');
+const characterPreviewBtn = element<HTMLButtonElement>('#characterPreviewBtn');
 
 let settings = loadSettings();
 applySettingsToDocument(settings);
@@ -121,6 +135,7 @@ let model: RwrModel | null = null;
 let currentFileName = 'edited_model.xml';
 let currentFilePath = '';
 let activeTool: ToolId = 'select';
+let previousNonMarqueeTool: NonMarqueeToolId = 'select';
 let selectedIds = new Set<string>();
 let undoStack: EditorSnapshot[] = [];
 let redoStack: EditorSnapshot[] = [];
@@ -200,6 +215,7 @@ const voxelGroup = new THREE.Group();
 const skeletonGroup = new THREE.Group();
 scene.add(voxelGroup, skeletonGroup);
 let voxelMesh: THREE.InstancedMesh | null = null;
+let voxelEdgeMesh: THREE.InstancedMesh | null = null;
 let skeletonPoints: THREE.Points | null = null;
 let selectionHelper: THREE.Box3Helper | null = null;
 let instanceVoxels: Voxel[] = [];
@@ -216,6 +232,16 @@ let pointerDragged = false;
 let cameraLookActive = false;
 let cameraLookLast = { x: 0, y: 0 };
 let shiftHeld = false;
+let marqueeMode: 'visible' | 'through' = 'through';
+let marqueePointerId: number | null = null;
+let marqueeStart = { x: 0, y: 0 };
+
+function releaseCameraInput(): void {
+  releasePressedActions(pressedCameraActions);
+  shiftHeld = false;
+  cameraLookActive = false;
+}
+
 const cameraLookDirection = new THREE.Vector3();
 let boneDragPointerId: number | null = null;
 const boneDragPlane = new THREE.Plane();
@@ -223,20 +249,13 @@ const boneDragOffset = new THREE.Vector3();
 const boneDragIntersection = new THREE.Vector3();
 const boneDragNormal = new THREE.Vector3();
 
-const toolCopy: Record<ToolId, { label: string; hint: string; help: string }> = {
-  select: { label: '选择', hint: '点击体素进行选择', help: '单击选择体素；按住 Ctrl 可多选。' },
-  sculpt: {
-    label: '雕刻',
-    hint: '在表面添加或删除体素',
-    help: '单击相邻表面添加体素；右键删除。可在上方切换左右键。',
-  },
-  paint: {
-    label: '绘色',
-    hint: '将当前颜色应用到体素',
-    help: '单击体素应用当前颜色；已有多选时可批量绘色。',
-  },
-  picker: { label: '取色', hint: '从模型读取体素颜色', help: '单击模型中的体素，将其颜色设为当前颜色。' },
-  move: { label: '移动', hint: '选择后按单位移动体素', help: '选择体素后，使用右侧方向按钮以一个单位移动。' },
+const toolCopy: Record<ToolId, { label: string }> = {
+  select: { label: '选择' },
+  sculpt: { label: '雕刻' },
+  paint: { label: '绘色' },
+  picker: { label: '取色' },
+  move: { label: '移动' },
+  marquee: { label: '框选' },
 };
 
 function resizeRenderer(): void {
@@ -268,6 +287,14 @@ function toast(message: string, type: 'success' | 'warning' | 'normal' = 'normal
     window.setTimeout(() => item.remove(), 220);
   }, 3200);
 }
+
+const characterPreview = new CharacterPreviewController({
+  root: characterPreviewModal,
+  trigger: characterPreviewBtn,
+  getModel: () => model,
+  notify: toast,
+  getCameraSpeed: () => settings.cameraSpeed,
+});
 
 function currentColor(): { r: number; g: number; b: number } {
   return { ...pickedColor };
@@ -354,9 +381,32 @@ function clearGroup(group: THREE.Group): void {
   }
 }
 
+function createVoxelEdgeGeometry(): THREE.BufferGeometry {
+  const thickness = 0.022;
+  const offset = 0.502;
+  const geometries: THREE.BoxGeometry[] = [];
+  const addEdge = (size: [number, number, number], position: [number, number, number]) => {
+    const geometry = new THREE.BoxGeometry(...size);
+    geometry.translate(...position);
+    geometries.push(geometry);
+  };
+  for (const a of [-offset, offset]) {
+    for (const b of [-offset, offset]) {
+      addEdge([1.018, thickness, thickness], [0, a, b]);
+      addEdge([thickness, 1.018, thickness], [a, 0, b]);
+      addEdge([thickness, thickness, 1.018], [a, b, 0]);
+    }
+  }
+  const merged = mergeGeometries(geometries, false);
+  geometries.forEach((geometry) => geometry.dispose());
+  if (!merged) throw new Error('无法创建体素边线几何体');
+  return merged;
+}
+
 function rebuildVoxelMesh(): void {
   clearGroup(voxelGroup);
   voxelMesh = null;
+  voxelEdgeMesh = null;
   animationRig = null;
   instanceVoxels = model?.voxels ?? [];
   if (!model || !instanceVoxels.length) {
@@ -364,7 +414,8 @@ function rebuildVoxelMesh(): void {
     return;
   }
 
-  const geometry = new THREE.BoxGeometry(0.96, 0.96, 0.96);
+  const voxelSize = settings.voxelDisplayMode === 'grid' ? 1 : 0.96;
+  const geometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
   const material =
     settings.lightingPreset === 'color' ? new THREE.MeshBasicMaterial() : new THREE.MeshLambertMaterial();
   voxelMesh = new THREE.InstancedMesh(geometry, material, instanceVoxels.length);
@@ -383,6 +434,22 @@ function rebuildVoxelMesh(): void {
   voxelMesh.instanceMatrix.needsUpdate = true;
   if (voxelMesh.instanceColor) voxelMesh.instanceColor.needsUpdate = true;
   voxelGroup.add(voxelMesh);
+  if (settings.voxelDisplayMode === 'grid') {
+    voxelEdgeMesh = new THREE.InstancedMesh(
+      createVoxelEdgeGeometry(),
+      new THREE.MeshBasicMaterial({
+        color: settings.theme === 'light' ? 0x3b4148 : 0x090b0e,
+      }),
+      instanceVoxels.length,
+    );
+    instanceVoxels.forEach((voxel, index) => {
+      matrix.makeTranslation(voxel.x, voxel.y, voxel.z);
+      voxelEdgeMesh!.setMatrixAt(index, matrix);
+    });
+    voxelEdgeMesh.instanceMatrix.needsUpdate = true;
+    voxelEdgeMesh.renderOrder = 3;
+    voxelGroup.add(voxelEdgeMesh);
+  }
   animationRig = new VoxelAnimationRig(model);
   updateSelectionHelper();
   const positions = activeAnimation
@@ -401,9 +468,14 @@ function applyVoxelAnimation(animatedPositions?: Vec3[]): void {
       poseMatrix.makeTranslation(voxel.x, voxel.y, voxel.z);
     }
     voxelMesh!.setMatrixAt(index, poseMatrix);
+    voxelEdgeMesh?.setMatrixAt(index, poseMatrix);
   });
   voxelMesh.instanceMatrix.needsUpdate = true;
   voxelMesh.computeBoundingSphere();
+  if (voxelEdgeMesh) {
+    voxelEdgeMesh.instanceMatrix.needsUpdate = true;
+    voxelEdgeMesh.computeBoundingSphere();
+  }
   if (selectionHelper) selectionHelper.visible = !driveVoxels;
 }
 
@@ -819,6 +891,10 @@ function scheduleAutosave(): void {
 }
 
 function setTool(tool: ToolId): void {
+  if (tool !== 'marquee' && marqueePointerId !== null) releaseMarqueePointer(marqueePointerId);
+  if (tool === 'marquee' && activeTool !== 'marquee') {
+    previousNonMarqueeTool = activeTool as NonMarqueeToolId;
+  }
   activeTool = tool;
   document.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach((button) => {
     const active = button.dataset.tool === tool;
@@ -829,11 +905,8 @@ function setTool(tool: ToolId): void {
     panel.classList.toggle('tool-panel-hidden', !panel.dataset.toolPanel?.split(' ').includes(tool));
   });
   activeToolLabel.textContent = toolCopy[tool].label;
-  toolModeTitle.textContent = `${toolCopy[tool].label}模式`;
-  toolModeHint.textContent = toolCopy[tool].hint;
-  toolHelp.textContent = toolCopy[tool].help;
   viewport.dataset.tool = tool;
-  if (tool === 'select' || tool === 'move') closeColorPicker();
+  if (tool === 'select' || tool === 'move' || tool === 'marquee') closeColorPicker();
   setStatus(`工具：${toolCopy[tool].label}`);
 }
 
@@ -853,6 +926,155 @@ function hitVoxel(event: PointerEvent): { voxel: Voxel; index: number; normal: T
   if (!voxel) return null;
   const normal = hit.face?.normal.clone().round() ?? new THREE.Vector3(0, 1, 0);
   return { voxel, index: hit.instanceId, normal };
+}
+
+interface MarqueeCandidate {
+  id: string;
+  index: number;
+  rect: ScreenRect;
+}
+
+const marqueeInstanceMatrix = new THREE.Matrix4();
+const marqueeWorldMatrix = new THREE.Matrix4();
+const marqueeProjectedPoint = new THREE.Vector3();
+const marqueeCubeCorners = [-1, 1].flatMap((x) =>
+  [-1, 1].flatMap((y) => [-1, 1].map((z) => new THREE.Vector3(x, y, z))),
+);
+
+function projectVoxelRect(index: number): ScreenRect | null {
+  if (!voxelMesh) return null;
+  const canvasRect = renderer.domElement.getBoundingClientRect();
+  const halfSize = settings.voxelDisplayMode === 'grid' ? 0.5 : 0.48;
+  voxelMesh.getMatrixAt(index, marqueeInstanceMatrix);
+  marqueeWorldMatrix.multiplyMatrices(voxelMesh.matrixWorld, marqueeInstanceMatrix);
+
+  marqueeProjectedPoint.set(0, 0, 0).applyMatrix4(marqueeWorldMatrix).project(camera);
+  if (marqueeProjectedPoint.z < -1 || marqueeProjectedPoint.z > 1) return null;
+
+  let left = Number.POSITIVE_INFINITY;
+  let top = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const corner of marqueeCubeCorners) {
+    marqueeProjectedPoint
+      .copy(corner)
+      .multiplyScalar(halfSize)
+      .applyMatrix4(marqueeWorldMatrix)
+      .project(camera);
+    const x = ((marqueeProjectedPoint.x + 1) / 2) * canvasRect.width;
+    const y = ((1 - marqueeProjectedPoint.y) / 2) * canvasRect.height;
+    left = Math.min(left, x);
+    top = Math.min(top, y);
+    right = Math.max(right, x);
+    bottom = Math.max(bottom, y);
+  }
+  return { left, top, right, bottom };
+}
+
+function nearestVoxelAtScreenPoint(x: number, y: number, width: number, height: number): number | null {
+  if (!voxelMesh || !width || !height) return null;
+  pointer.set((x / width) * 2 - 1, -(y / height) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObject(voxelMesh, false)[0];
+  return hit?.instanceId ?? null;
+}
+
+function visibleMarqueeCandidates(candidates: MarqueeCandidate[]): MarqueeCandidate[] {
+  const canvasRect = renderer.domElement.getBoundingClientRect();
+  const nearestByPoint = new Map<string, number | null>();
+  return candidates.filter((candidate) => {
+    const { left, top, right, bottom } = candidate.rect;
+    const samples: Array<[number, number]> = [
+      [0.5, 0.5],
+      [0.25, 0.25],
+      [0.75, 0.25],
+      [0.25, 0.75],
+      [0.75, 0.75],
+    ];
+    return samples.some(([xRatio, yRatio]) => {
+      const x = left + (right - left) * xRatio;
+      const y = top + (bottom - top) * yRatio;
+      const key = `${Math.round(x)}:${Math.round(y)}`;
+      if (!nearestByPoint.has(key)) {
+        nearestByPoint.set(key, nearestVoxelAtScreenPoint(x, y, canvasRect.width, canvasRect.height));
+      }
+      return nearestByPoint.get(key) === candidate.index;
+    });
+  });
+}
+
+function updateMarqueeOverlay(x: number, y: number): ScreenRect {
+  const rect = normalizeScreenRect(marqueeStart.x, marqueeStart.y, x, y);
+  marqueeSelection.style.left = `${rect.left}px`;
+  marqueeSelection.style.top = `${rect.top}px`;
+  marqueeSelection.style.width = `${rect.right - rect.left}px`;
+  marqueeSelection.style.height = `${rect.bottom - rect.top}px`;
+  return rect;
+}
+
+function beginMarquee(event: PointerEvent): boolean {
+  if (activeTool !== 'marquee' || event.button !== 0) return false;
+  releaseCameraInput();
+  const rect = renderer.domElement.getBoundingClientRect();
+  marqueePointerId = event.pointerId;
+  marqueeStart = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  controls.enabled = false;
+  marqueeSelection.hidden = false;
+  marqueeSelection.setAttribute('aria-hidden', 'false');
+  updateMarqueeOverlay(marqueeStart.x, marqueeStart.y);
+  renderer.domElement.setPointerCapture(event.pointerId);
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  return true;
+}
+
+function updateMarquee(event: PointerEvent): boolean {
+  if (marqueePointerId !== event.pointerId) return false;
+  const rect = renderer.domElement.getBoundingClientRect();
+  updateMarqueeOverlay(event.clientX - rect.left, event.clientY - rect.top);
+  pointerDragged = true;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  return true;
+}
+
+function releaseMarqueePointer(pointerId: number): void {
+  marqueePointerId = null;
+  controls.enabled = true;
+  marqueeSelection.hidden = true;
+  marqueeSelection.setAttribute('aria-hidden', 'true');
+  if (renderer.domElement.hasPointerCapture(pointerId)) renderer.domElement.releasePointerCapture(pointerId);
+}
+
+function finishMarquee(event: PointerEvent): boolean {
+  if (marqueePointerId !== event.pointerId) return false;
+  const canvasRect = renderer.domElement.getBoundingClientRect();
+  const selection = updateMarqueeOverlay(event.clientX - canvasRect.left, event.clientY - canvasRect.top);
+  releaseMarqueePointer(event.pointerId);
+
+  if (model && selection.right - selection.left >= 4 && selection.bottom - selection.top >= 4) {
+    const candidates = instanceVoxels.flatMap((voxel, index) => {
+      const rect = projectVoxelRect(index);
+      return rect && rectangleOverlapRatio(selection, rect) > 0.5 ? [{ id: voxel.id, index, rect }] : [];
+    });
+    const matches = marqueeMode === 'visible' ? visibleMarqueeCandidates(candidates) : candidates;
+    if (!event.ctrlKey) selectedIds.clear();
+    matches.forEach((candidate) => selectedIds.add(candidate.id));
+    rebuildVoxelMesh();
+    updateStats();
+    setStatus(`框选了 ${matches.length} 个体素`, 'success');
+  }
+  const nextTool = resolveMarqueeCompletionTool(settings.marqueeCompletionAction, previousNonMarqueeTool);
+  if (nextTool) setTool(nextTool);
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  return true;
+}
+
+function cancelMarquee(pointerId: number): boolean {
+  if (marqueePointerId !== pointerId) return false;
+  releaseMarqueePointer(pointerId);
+  return true;
 }
 
 function boneEditingAvailable(): boolean {
@@ -1294,22 +1516,7 @@ function updateAnimationUi(): void {
 }
 
 function sampledAnimationPositions(animation: RwrAnimation, time: number): Vec3[] {
-  if (!animation.frames.length) return skeletonPositions();
-  const nextIndex = animation.frames.findIndex((frame) => frame.time >= time);
-  if (nextIndex === -1) return animation.frames.at(-1)?.positions ?? skeletonPositions();
-  if (nextIndex === 0) return animation.frames[0]?.positions ?? skeletonPositions();
-  const next = animation.frames[nextIndex]!;
-  const previous = animation.frames[nextIndex - 1]!;
-  const span = Math.max(0.0001, next.time - previous.time);
-  const mix = Math.max(0, Math.min(1, (time - previous.time) / span));
-  return previous.positions.map((position, index) => {
-    const target = next.positions[index] ?? position;
-    return {
-      x: position.x + (target.x - position.x) * mix,
-      y: position.y + (target.y - position.y) * mix,
-      z: position.z + (target.z - position.z) * mix,
-    };
-  });
+  return sampleAnimationPositions(animation, time, skeletonPositions());
 }
 
 function renderAnimationPose(positions?: Vec3[]): void {
@@ -1332,6 +1539,8 @@ const shortcutActions: ShortcutAction[] = [
   'toolPaint',
   'toolPicker',
   'toolMove',
+  'marqueeThrough',
+  'marqueeVisible',
   'cameraForward',
   'cameraBack',
   'cameraLeft',
@@ -1374,6 +1583,7 @@ function updateShortcutLabels(): void {
 function applySettings(): void {
   saveSettings(settings);
   applySettingsToDocument(settings);
+  setLanguage(settings.language);
   const lighting = lightingPresets[settings.lightingPreset];
   ambient.intensity = lighting.ambient;
   fillLight.intensity = lighting.fill;
@@ -1412,6 +1622,8 @@ function populateSettingsForm(): void {
   element<HTMLElement>('#cameraSpeedValue').textContent =
     `${settings.cameraSpeed.toFixed(2).replace(/0$/, '')}×`;
   element<HTMLSelectElement>('#rotationModeSetting').value = settings.rotationMode;
+  element<HTMLSelectElement>('#voxelDisplayModeSetting').value = settings.voxelDisplayMode;
+  element<HTMLSelectElement>('#marqueeCompletionActionSetting').value = settings.marqueeCompletionAction;
   element<HTMLInputElement>('#autosaveSetting').checked = settings.autosave;
   element<HTMLInputElement>('#confirmDeleteSetting').checked = settings.confirmDelete;
   element<HTMLInputElement>('#confirmOverwriteSetting').checked = settings.confirmOverwrite;
@@ -1494,6 +1706,17 @@ function bindSettings(): void {
       'success',
     );
   });
+  element<HTMLSelectElement>('#voxelDisplayModeSetting').addEventListener('change', (event) => {
+    settings.voxelDisplayMode = (event.target as HTMLSelectElement)
+      .value as EditorSettings['voxelDisplayMode'];
+    applySettings();
+    toast(settings.voxelDisplayMode === 'grid' ? '已启用紧密网格体素。' : '已启用悬浮体素。', 'success');
+  });
+  element<HTMLSelectElement>('#marqueeCompletionActionSetting').addEventListener('change', (event) => {
+    settings.marqueeCompletionAction = (event.target as HTMLSelectElement)
+      .value as EditorSettings['marqueeCompletionAction'];
+    applySettings();
+  });
   element<HTMLInputElement>('#autosaveSetting').addEventListener('change', (event) => {
     settings.autosave = (event.target as HTMLInputElement).checked;
     applySettings();
@@ -1526,6 +1749,10 @@ function bindSettings(): void {
   });
   element<HTMLSelectElement>('#fontSizeSetting').addEventListener('change', (event) => {
     settings.fontSize = Number((event.target as HTMLSelectElement).value) as EditorSettings['fontSize'];
+    applySettings();
+  });
+  element<HTMLSelectElement>('#languageSetting').addEventListener('change', (event) => {
+    settings.language = (event.target as HTMLSelectElement).value as EditorSettings['language'];
     applySettings();
   });
   document.querySelectorAll<HTMLInputElement>('[data-shortcut-input]').forEach((input) =>
@@ -1561,6 +1788,11 @@ function bindSettings(): void {
 }
 
 function bindInputStyleOnboarding(): void {
+  element('#onboardingEnglishBtn').addEventListener('click', () => {
+    settings.language = 'en';
+    populateSettingsForm();
+    applySettings();
+  });
   document.querySelectorAll<HTMLButtonElement>('[data-input-style]').forEach((button) =>
     button.addEventListener('click', () => {
       settings.rotationMode = button.dataset.inputStyle === 'scene' ? 'scene' : 'view';
@@ -1583,6 +1815,23 @@ function bindInputStyleOnboarding(): void {
 document
   .querySelectorAll<HTMLButtonElement>('[data-tool]')
   .forEach((button) => button.addEventListener('click', () => setTool(button.dataset.tool as ToolId)));
+
+function activateMarqueeMode(mode: 'visible' | 'through'): void {
+  marqueeMode = mode;
+  document.querySelectorAll<HTMLButtonElement>('[data-marquee-mode]').forEach((item) => {
+    item.classList.toggle('active', item.dataset.marqueeMode === mode);
+  });
+  const marqueeTool = element<HTMLButtonElement>('#marqueeToolBtn');
+  marqueeTool.title = `框选 · ${mode === 'visible' ? '可视框选' : '穿透框选'}`;
+  setTool('marquee');
+}
+
+document.querySelectorAll<HTMLButtonElement>('[data-marquee-mode]').forEach((button) =>
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    activateMarqueeMode(button.dataset.marqueeMode === 'through' ? 'through' : 'visible');
+  }),
+);
 colorSwatch.addEventListener('click', (event) => {
   event.stopPropagation();
   toggleColorPicker();
@@ -1676,11 +1925,15 @@ overwriteBtn.addEventListener('click', () => {
   closeFileMenu();
   void overwriteModel();
 });
+lightingQuickSelect.addEventListener('pointerdown', releaseCameraInput, { capture: true });
+lightingQuickSelect.addEventListener('focus', releaseCameraInput);
 lightingQuickSelect.addEventListener('change', () => {
+  releaseCameraInput();
   settings.lightingPreset = lightingQuickSelect.value as EditorSettings['lightingPreset'];
   populateSettingsForm();
   applySettings();
   toast('场景光照已切换。', 'success');
+  requestAnimationFrame(() => viewport.focus({ preventScroll: true }));
 });
 undoBtn.addEventListener('click', undo);
 redoBtn.addEventListener('click', redo);
@@ -1697,14 +1950,38 @@ document.querySelectorAll<HTMLButtonElement>('[data-move]').forEach((button) =>
     moveSelection({ x, y, z });
   }),
 );
-deleteSelectionBtn.addEventListener('click', () => {
+function performDeleteSelection(): void {
   if (!model || !selectedIds.size) return;
-  if (settings.confirmDelete && !window.confirm(`确定删除所选的 ${selectedIds.size} 个体素吗？`)) return;
   const ids = new Set(selectedIds);
   commit(`已删除 ${ids.size} 个体素`, () => {
     model!.remove(ids);
     selectedIds.clear();
   });
+}
+
+function closeDeleteSelectionModal(): void {
+  deleteSelectionModal.classList.add('hidden');
+}
+
+function requestDeleteSelection(): void {
+  if (!model || !selectedIds.size) return;
+  if (settings.confirmDelete && selectedIds.size > 1) {
+    deleteSelectionCount.textContent = String(selectedIds.size);
+    deleteSelectionModal.classList.remove('hidden');
+    element<HTMLButtonElement>('#confirmDeleteSelectionBtn').focus();
+    return;
+  }
+  performDeleteSelection();
+}
+
+deleteSelectionBtn.addEventListener('click', requestDeleteSelection);
+element('#confirmDeleteSelectionBtn').addEventListener('click', () => {
+  closeDeleteSelectionModal();
+  performDeleteSelection();
+});
+element('#cancelDeleteSelectionBtn').addEventListener('click', closeDeleteSelectionModal);
+deleteSelectionModal.addEventListener('pointerdown', (event) => {
+  if (event.target === deleteSelectionModal) closeDeleteSelectionModal();
 });
 rebindBtn.addEventListener('click', () => {
   if (!model) return;
@@ -1855,6 +2132,7 @@ renderer.domElement.addEventListener(
     if (event.button !== 0 && event.button !== 2) return;
     pointerDown = { x: event.clientX, y: event.clientY };
     pointerDragged = false;
+    if (beginMarquee(event)) return;
     if (beginBoneDrag(event)) return;
     if (event.button === 0 && settings.rotationMode === 'view') {
       cameraLookActive = true;
@@ -1867,6 +2145,7 @@ renderer.domElement.addEventListener(
 renderer.domElement.addEventListener(
   'pointermove',
   (event) => {
+    if (updateMarquee(event)) return;
     if (updateBoneDrag(event)) return;
     if (Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 5) pointerDragged = true;
     if (cameraLookActive && event.buttons & 1) {
@@ -1879,6 +2158,7 @@ renderer.domElement.addEventListener(
 renderer.domElement.addEventListener(
   'pointerup',
   (event) => {
+    if (finishMarquee(event)) return;
     if (endBoneDrag(event.pointerId)) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -1896,6 +2176,7 @@ renderer.domElement.addEventListener(
 renderer.domElement.addEventListener(
   'pointercancel',
   (event) => {
+    if (cancelMarquee(event.pointerId)) return;
     endBoneDrag(event.pointerId);
     cameraLookActive = false;
   },
@@ -1916,6 +2197,10 @@ viewport.addEventListener('drop', (event) => {
 });
 
 function runShortcutAction(action: ShortcutAction): void {
+  if (action === 'marqueeThrough' || action === 'marqueeVisible') {
+    activateMarqueeMode(action === 'marqueeThrough' ? 'through' : 'visible');
+    return;
+  }
   const tools: Partial<Record<ShortcutAction, ToolId>> = {
     toolSelect: 'select',
     toolSculpt: 'sculpt',
@@ -1936,12 +2221,6 @@ function runShortcutAction(action: ShortcutAction): void {
   else if (action === 'deleteSelection') deleteSelectionBtn.click();
 }
 
-function isTextEntryTarget(target: HTMLElement): boolean {
-  if (target.closest('textarea,[contenteditable="true"]')) return true;
-  const input = target.closest<HTMLInputElement>('input');
-  return Boolean(input && ['text', 'number', 'search', 'email', 'url', 'password'].includes(input.type));
-}
-
 window.addEventListener(
   'keydown',
   (event) => {
@@ -1950,14 +2229,17 @@ window.addEventListener(
     if (event.key === 'Escape') {
       closeColorPicker();
       closeFileMenu();
-      if (!overwriteModal.classList.contains('hidden')) closeOverwriteModal(false);
+      if (!deleteSelectionModal.classList.contains('hidden')) closeDeleteSelectionModal();
+      else if (!overwriteModal.classList.contains('hidden')) closeOverwriteModal(false);
       else unsavedModelModal.classList.add('hidden');
     }
     if (
       !inputStyleModal.classList.contains('hidden') ||
       !settingsModal.classList.contains('hidden') ||
       !overwriteModal.classList.contains('hidden') ||
-      !unsavedModelModal.classList.contains('hidden')
+      !deleteSelectionModal.classList.contains('hidden') ||
+      !unsavedModelModal.classList.contains('hidden') ||
+      characterPreview.isOpen()
     )
       return;
     const cameraAction = cameraShortcutActionForEvent(event);
@@ -1983,11 +2265,7 @@ window.addEventListener(
   },
   { capture: true },
 );
-window.addEventListener('blur', () => {
-  pressedCameraActions.clear();
-  shiftHeld = false;
-  cameraLookActive = false;
-});
+window.addEventListener('blur', releaseCameraInput);
 
 bindSettings();
 bindInputStyleOnboarding();

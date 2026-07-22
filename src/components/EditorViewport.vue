@@ -15,6 +15,7 @@
       <div class="viewport-badges">
         <span id="viewModeBadge">透视视图</span><span id="fpsBadge">-- FPS</span>
       </div>
+      <div id="marqueeSelection" class="marquee-selection" hidden aria-hidden="true" />
     </div>
     <footer class="statusbar">
       <div class="status-left"><span class="status-dot" /><span id="statusText">就绪</span></div>

@@ -2,12 +2,12 @@
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true"><span /><span /><span /></div>
-      <div><strong>RWR 体素编辑器</strong><small>INDUSTRIAL / NEXT</small></div>
+      <div><strong>RWR 体素编辑器</strong><small>NEXT</small></div>
     </div>
     <nav class="file-actions" aria-label="文件操作">
       <div class="file-menu-wrap">
         <button id="fileMenuBtn" class="button" aria-haspopup="menu" aria-expanded="false">
-          文件 <span class="menu-caret">▾</span>
+          文件 <span class="menu-caret" aria-hidden="true" />
         </button>
         <div id="fileMenu" class="file-menu hidden" role="menu">
           <button id="newModelBtn" role="menuitem">

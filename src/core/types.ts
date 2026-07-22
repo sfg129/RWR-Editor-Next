@@ -1,4 +1,4 @@
-export type ToolId = 'select' | 'sculpt' | 'paint' | 'picker' | 'move';
+export type ToolId = 'select' | 'sculpt' | 'paint' | 'picker' | 'move' | 'marquee';
 
 export type ShortcutAction =
   | 'newModel'
@@ -13,6 +13,8 @@ export type ShortcutAction =
   | 'toolPaint'
   | 'toolPicker'
   | 'toolMove'
+  | 'marqueeThrough'
+  | 'marqueeVisible'
   | 'cameraForward'
   | 'cameraBack'
   | 'cameraLeft'
@@ -83,6 +85,8 @@ export interface EditorSettings {
   lightingPreset: 'soft' | 'standard' | 'bright' | 'color';
   cameraSpeed: number;
   rotationMode: 'view' | 'scene';
+  voxelDisplayMode: 'floating' | 'grid';
+  marqueeCompletionAction: 'stay' | 'select' | 'previous';
   autosave: boolean;
   confirmDelete: boolean;
   confirmOverwrite: boolean;

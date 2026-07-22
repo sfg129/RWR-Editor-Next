@@ -46,4 +46,25 @@
       </div>
     </div>
   </div>
+  <div
+    id="deleteSelectionModal"
+    class="modal-backdrop hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="deleteSelectionTitle"
+  >
+    <div class="decision-dialog">
+      <header>
+        <div>
+          <span class="eyebrow">DELETE VOXELS</span>
+          <h2 id="deleteSelectionTitle">确认删除所选体素</h2>
+        </div>
+      </header>
+      <p>将删除当前选择的 <strong id="deleteSelectionCount">0</strong> 个体素。该操作可通过撤销恢复。</p>
+      <div class="decision-actions two">
+        <button id="confirmDeleteSelectionBtn" class="button danger">确认删除</button
+        ><button id="cancelDeleteSelectionBtn" class="button">取消</button>
+      </div>
+    </div>
+  </div>
 </template>

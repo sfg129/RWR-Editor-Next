@@ -1,7 +1,7 @@
 import type { EditorSettings } from '../core/types';
 
 const STORAGE_KEY = 'rwr-editor-settings-v1';
-const INPUT_STYLE_ONBOARDING_KEY = 'rwr-editor-input-style-onboarding-v1';
+const INPUT_STYLE_ONBOARDING_KEY = 'rwr-editor-input-style-onboarding-v3';
 
 export const defaultSettings: EditorSettings = {
   language: 'zh-CN',
@@ -15,6 +15,8 @@ export const defaultSettings: EditorSettings = {
   lightingPreset: 'bright',
   cameraSpeed: 1,
   rotationMode: 'view',
+  voxelDisplayMode: 'floating',
+  marqueeCompletionAction: 'select',
   autosave: true,
   confirmDelete: true,
   confirmOverwrite: true,
@@ -35,6 +37,8 @@ export const defaultSettings: EditorSettings = {
     toolPaint: '3',
     toolPicker: '4',
     toolMove: '5',
+    marqueeThrough: 'Ctrl+1',
+    marqueeVisible: 'Ctrl+2',
     cameraForward: 'W',
     cameraBack: 'S',
     cameraLeft: 'A',
@@ -51,6 +55,11 @@ export function loadSettings(): EditorSettings {
       language: stored.language === 'en' ? 'en' : 'zh-CN',
       theme: stored.theme === 'light' ? 'light' : 'dark',
       rotationMode: stored.rotationMode === 'scene' ? 'scene' : 'view',
+      voxelDisplayMode: stored.voxelDisplayMode === 'grid' ? 'grid' : 'floating',
+      marqueeCompletionAction:
+        stored.marqueeCompletionAction === 'stay' || stored.marqueeCompletionAction === 'previous'
+          ? stored.marqueeCompletionAction
+          : 'select',
       fontSize: stored.fontSize === 18 || stored.fontSize === 20 ? stored.fontSize : 16,
       shortcuts: { ...defaultSettings.shortcuts, ...stored.shortcuts },
     };

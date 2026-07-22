@@ -29,7 +29,10 @@
           <strong>纯鼠标操作</strong><span>左键拖动围绕场景和模型旋转</span><em>适合传统编辑器操作</em>
         </button>
       </div>
-      <p class="input-style-note">仅影响“设置 → 功能 → 左键旋转模式”，可随时调整。</p>
+      <div class="input-style-footer">
+        <button id="onboardingEnglishBtn" class="text-button" type="button">Switch to English</button>
+        <p class="input-style-note">仅影响“设置 → 功能 → 左键旋转模式”，可随时调整。</p>
+      </div>
     </div>
   </div>
 </template>
