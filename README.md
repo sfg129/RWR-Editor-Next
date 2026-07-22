@@ -14,7 +14,7 @@ src/
 ├─ editor/              Three.js 场景、交互和预览控制器
 ├─ i18n/                运行时语言目录与即时界面本地化
 ├─ platform/            可注入、可测试的 Tauri 桌面桥接
-└─ styles/              工业风组件与主题样式
+└─ styles/              组件与主题样式
 src-tauri/              Tauri 2 / Rust 原生文件边界
 tests/                  Bun 自动化回归测试
 docs/                   XML 兼容契约与发布检查
@@ -32,7 +32,7 @@ scripts/                跨平台 Bun 构建与资源维护任务
 
 ## 开发与构建
 
-需要 Bun 1.3+、通过 rustup 安装的系统 Rust stable，以及 [Tauri 2 对应平台依赖](https://v2.tauri.app/start/prerequisites/)。项目不使用 Python、PowerShell 构建脚本或仓库内嵌 Rust 工具链。
+需要 Bun 1.3+、通过 rustup 安装的系统 Rust stable，以及 [Tauri 2 对应平台依赖](https://v2.tauri.app/start/prerequisites/)。
 
 ```sh
 bun install
