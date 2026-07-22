@@ -5,7 +5,7 @@ import {
   defaultSettings,
   loadSettings,
   shouldShowInputStyleOnboarding,
-} from '../src/settings';
+} from '../src/config/settings';
 
 describe('editor settings', () => {
   beforeEach(() => localStorage.clear());

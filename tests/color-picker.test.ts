@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { hsvToRgb, hueFromPoint, rgbToHsv, saturationValueFromPoint } from '../src/color-picker';
+import { hsvToRgb, hueFromPoint, rgbToHsv, saturationValueFromPoint } from '../src/core/color/color-picker';
 
 describe('color picker math', () => {
   it('round-trips normalized RGB colors through HSV', () => {

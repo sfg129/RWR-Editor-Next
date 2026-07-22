@@ -1,0 +1,253 @@
+/*
+ * RWR Editor Next industrial skin
+ * Graphite is the structural colour; --accent is the single configurable
+ * interaction colour. Red and green are reserved for semantic feedback.
+ */
+:root {
+  --accent: #f0b84b;
+  --accent-rgb: 240, 184, 75;
+  --bg: #0b0d0f;
+  --surface-0: #101316;
+  --surface-1: #15191d;
+  --surface-2: #1a1f24;
+  --surface-3: #22282e;
+  --border: #30373d;
+  --border-light: #465058;
+  --text: #f2f3f3;
+  --muted: #c0c6ca;
+  --dim: #929ba1;
+  font-family: 'Bahnschrift', 'Segoe UI Variable', 'Microsoft YaHei UI', sans-serif;
+}
+
+.app-shell,
+.viewport,
+.empty-state,
+.panel,
+.model-panel,
+.animation-workspace,
+.animation-workspace > summary,
+.about-card {
+  background-image: none;
+}
+
+.app-shell {
+  background: var(--bg);
+}
+
+.topbar {
+  min-height: 64px;
+  border-bottom: 2px solid var(--border-light);
+  background: #111417;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.brand strong {
+  letter-spacing: 0.05em;
+}
+.brand small {
+  color: var(--accent);
+  letter-spacing: 0.16em;
+}
+
+.workspace {
+  grid-template-columns: 78px minmax(440px, 1fr) 370px;
+}
+.tool-rail {
+  border-right: 2px solid var(--border);
+  background: #101316;
+}
+.inspector {
+  padding: 10px;
+  background: #111519;
+  border-left: 2px solid var(--border);
+}
+.viewport {
+  background: #0e1114;
+}
+
+.panel,
+.animation-workspace,
+.file-menu,
+.settings-dialog,
+.input-style-dialog,
+.decision-dialog,
+.choice-dialog,
+.input-style-options > button,
+.style-visual,
+.about-card,
+.language-preview,
+.editor-group,
+.check-control {
+  border-radius: 3px;
+  box-shadow: none;
+}
+
+.panel {
+  border-color: var(--border);
+  border-left: 3px solid var(--border-light);
+  background: var(--surface-1);
+}
+
+.model-panel,
+.tool-panel,
+.animation-workspace[open] {
+  border-left-color: var(--accent);
+}
+
+.button,
+.icon-button,
+.tool,
+.tool-tabs button,
+.move-pad button,
+.y-move button,
+.timeline-controls button,
+.frame-actions button,
+.settings-nav button,
+input[type='number'],
+input[type='text'],
+select,
+kbd,
+.file-state,
+.beta-tag,
+.active-tool-pill,
+.tool-mode-banner,
+.color-swatch,
+.rgb-values.readonly output,
+.color-picker-popover,
+.animation-tabs,
+.animation-tabs button,
+.workspace-icon,
+.workspace-section-title .section-mark,
+.shortcut-list input,
+.toast {
+  border-radius: 2px;
+}
+
+.button,
+.tool-tabs button,
+input[type='number'],
+input[type='text'],
+select,
+.move-pad button,
+.y-move button,
+.timeline-controls button,
+.frame-actions button {
+  background: var(--surface-0);
+}
+
+.button:hover:not(:disabled),
+.tool-tabs button:hover,
+.move-pad button:hover,
+.y-move button:hover,
+.frame-actions button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.button.primary,
+.tool.active,
+.tool-tabs button.active,
+.animation-tabs button.active,
+.active-tool-pill {
+  color: #16130c;
+  background: var(--accent);
+}
+
+kbd {
+  border-color: color-mix(in srgb, var(--accent), #000 35%);
+  color: #fff;
+  background: #252a2e;
+  font-family: 'Cascadia Mono', 'SFMono-Regular', monospace;
+}
+
+.button.primary kbd,
+.tool.active kbd {
+  border-color: #090b0c;
+  color: #fff !important;
+  background: #20252a;
+}
+
+.tool.active::before {
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.tool-mode-banner,
+.context-help,
+.warning-note {
+  border-radius: 0;
+}
+.future-panel {
+  border-style: solid;
+}
+
+.settings-nav {
+  background: #101316;
+}
+.settings-nav button.active {
+  border-left: 3px solid var(--accent);
+}
+.settings-page.active {
+  animation: none;
+}
+
+.modal-backdrop {
+  background: rgba(3, 4, 5, 0.8);
+  backdrop-filter: none;
+}
+.settings-dialog,
+.input-style-dialog,
+.decision-dialog,
+.choice-dialog {
+  border-top: 3px solid var(--accent);
+}
+
+:root[data-theme='light'] {
+  --bg: #e7e9e8;
+  --surface-0: #f8f9f8;
+  --surface-1: #eef0ef;
+  --surface-2: #e3e6e5;
+  --surface-3: #d6dad8;
+  --border: #c1c7c4;
+  --border-light: #8f9994;
+  --text: #171b19;
+  --muted: #424b47;
+  --dim: #65706b;
+}
+
+:root[data-theme='light'] .app-shell,
+:root[data-theme='light'] .topbar,
+:root[data-theme='light'] .viewport,
+:root[data-theme='light'] .panel,
+:root[data-theme='light'] .model-panel,
+:root[data-theme='light'] .animation-workspace,
+:root[data-theme='light'] .animation-workspace > summary,
+:root[data-theme='light'] .about-card {
+  background-image: none;
+  box-shadow: none;
+}
+
+:root[data-theme='light'] .topbar {
+  background: #f4f5f4;
+}
+:root[data-theme='light'] .tool-rail,
+:root[data-theme='light'] .inspector,
+:root[data-theme='light'] .settings-nav {
+  background: #e4e7e5;
+}
+:root[data-theme='light'] .panel {
+  background: #f2f3f2;
+}
+:root[data-theme='light'] .viewport {
+  background: #cfd3d1;
+}
+
+@media (max-width: 1200px) {
+  .workspace {
+    grid-template-columns: 70px minmax(380px, 1fr) 330px;
+  }
+}

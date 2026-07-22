@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'bun:test';
-import { cameraRelativeMotion } from '../src/camera-motion';
+import { cameraRelativeMotion } from '../src/core/camera/camera-motion';
 
 describe('camera-relative keyboard movement', () => {
   it('follows the full pitched camera direction instead of flattening to XZ', () => {

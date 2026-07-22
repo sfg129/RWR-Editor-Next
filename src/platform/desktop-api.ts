@@ -23,7 +23,8 @@ export function createDesktopBridge(invokeCommand: InvokeCommand = invoke): {
   return {
     isAvailable: () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window,
     openTextFile: (kind) => invokeCommand<OpenedTextFile | null>('open_text_file', { kind }),
-    saveTextFile: (defaultName, text) => invokeCommand<SavedTextFile | null>('save_text_file', { defaultName, text }),
+    saveTextFile: (defaultName, text) =>
+      invokeCommand<SavedTextFile | null>('save_text_file', { defaultName, text }),
     overwriteTextFile: (path, text) => invokeCommand<SavedTextFile>('overwrite_text_file', { path, text }),
   };
 }

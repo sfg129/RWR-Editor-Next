@@ -1,4 +1,4 @@
-import type { EditorSettings } from './types';
+import type { EditorSettings } from '../core/types';
 
 const STORAGE_KEY = 'rwr-editor-settings-v1';
 const INPUT_STYLE_ONBOARDING_KEY = 'rwr-editor-input-style-onboarding-v1';
@@ -18,7 +18,7 @@ export const defaultSettings: EditorSettings = {
   autosave: true,
   confirmDelete: true,
   confirmOverwrite: true,
-  accent: '#e6b85c',
+  accent: '#f0b84b',
   brightness: 100,
   uiScale: 100,
   fontSize: 16,

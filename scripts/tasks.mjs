@@ -26,7 +26,8 @@ function findVsWhere() {
   const programFilesX86 = process.env['ProgramFiles(x86)'];
   const candidates = [
     programFilesX86 && join(programFilesX86, 'Microsoft Visual Studio', 'Installer', 'vswhere.exe'),
-    process.env.ProgramFiles && join(process.env.ProgramFiles, 'Microsoft Visual Studio', 'Installer', 'vswhere.exe'),
+    process.env.ProgramFiles &&
+      join(process.env.ProgramFiles, 'Microsoft Visual Studio', 'Installer', 'vswhere.exe'),
   ].filter(Boolean);
   return candidates.find(existsSync);
 }
@@ -43,7 +44,7 @@ function prependPath(env, directory) {
   const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
   const current = env[pathKey] ?? '';
   const entries = current.split(delimiter).filter(Boolean);
-  const normalize = (value) => process.platform === 'win32' ? value.toLowerCase() : value;
+  const normalize = (value) => (process.platform === 'win32' ? value.toLowerCase() : value);
   if (!entries.some((entry) => normalize(entry) === normalize(directory))) {
     env[pathKey] = `${directory}${delimiter}${current}`;
   }
@@ -60,18 +61,28 @@ function withNativeBuildEnvironment() {
 
   const vswhere = findVsWhere();
   if (!vswhere) throw new Error('未找到 Microsoft Visual Studio Build Tools（vswhere.exe）。');
-  const query = spawnSync(vswhere, [
-    '-latest', '-products', '*',
-    '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
-    '-property', 'installationPath',
-  ], { encoding: 'utf8', shell: false });
+  const query = spawnSync(
+    vswhere,
+    [
+      '-latest',
+      '-products',
+      '*',
+      '-requires',
+      'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
+      '-property',
+      'installationPath',
+    ],
+    { encoding: 'utf8', shell: false },
+  );
   const installationPath = query.stdout?.trim();
-  if (query.status !== 0 || !installationPath) throw new Error('未找到包含 C++ 工具的 Visual Studio Build Tools。');
+  if (query.status !== 0 || !installationPath)
+    throw new Error('未找到包含 C++ 工具的 Visual Studio Build Tools。');
 
   const vcvars = join(installationPath, 'VC', 'Auxiliary', 'Build', 'vcvars64.bat');
   if (!existsSync(vcvars)) throw new Error(`缺少 MSVC 环境脚本：${vcvars}`);
   const initialized = spawnSync('cmd.exe', ['/d', '/c', 'call', vcvars, '>nul', '&&', 'set'], {
-    encoding: 'utf8', shell: false,
+    encoding: 'utf8',
+    shell: false,
   });
   if (initialized.status !== 0) throw new Error('无法初始化 MSVC 编译环境。');
   for (const line of initialized.stdout.split(/\r?\n/)) {
@@ -93,8 +104,23 @@ function test() {
 }
 
 function frontendBuild() {
-  run(bun, [tool('typescript', 'bin', 'tsc')]);
+  run(bun, [tool('vue-tsc', 'bin', 'vue-tsc.js'), '--noEmit']);
   run(bun, [tool('vite', 'bin', 'vite.js'), 'build', '--base=./', '--outDir=dist', '--emptyOutDir']);
+}
+
+function format(write) {
+  run(bun, [
+    tool('prettier', 'bin', 'prettier.cjs'),
+    write ? '--write' : '--check',
+    'src',
+    'tests',
+    'scripts',
+    'docs',
+    'README.md',
+    'package.json',
+    'tsconfig.json',
+    'vite.config.ts',
+  ]);
 }
 
 function bundleName() {
@@ -109,7 +135,10 @@ function copyReleaseArtifacts() {
   const target = join(root, 'src-tauri', 'target', 'release');
   const binary = join(target, process.platform === 'win32' ? 'rwr-editor.exe' : 'rwr-editor');
   if (existsSync(binary)) {
-    copyFileSync(binary, join(release, process.platform === 'win32' ? 'RWREditor-Tauri.exe' : 'rwr-editor'));
+    copyFileSync(
+      binary,
+      join(release, process.platform === 'win32' ? 'RWR-Editor-Next.exe' : 'rwr-editor-next'),
+    );
   }
   const bundleDir = join(target, 'bundle', bundleName());
   if (!existsSync(bundleDir)) return;
@@ -131,13 +160,22 @@ function rustCheck() {
   run(findCargo(), ['check', '--manifest-path', join(root, 'src-tauri', 'Cargo.toml')], { env });
 }
 
+function check() {
+  test();
+  frontendBuild();
+  rustCheck();
+}
+
 async function waitForPort(port, timeoutMs = 20_000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const open = await new Promise((resolvePort) => {
-      const socket = createServer().once('error', () => resolvePort(true)).once('listening', function () {
-        this.close(() => resolvePort(false));
-      }).listen(port, '127.0.0.1');
+      const socket = createServer()
+        .once('error', () => resolvePort(true))
+        .once('listening', function () {
+          this.close(() => resolvePort(false));
+        })
+        .listen(port, '127.0.0.1');
       socket.unref();
     });
     if (open) return;
@@ -149,9 +187,14 @@ async function waitForPort(port, timeoutMs = 20_000) {
 async function dev() {
   install();
   const vite = spawn(bun, [tool('vite', 'bin', 'vite.js'), '--host', '127.0.0.1', '--port', '5173'], {
-    cwd: root, env: process.env, stdio: 'inherit', shell: false,
+    cwd: root,
+    env: process.env,
+    stdio: 'inherit',
+    shell: false,
   });
-  const stopVite = () => { if (!vite.killed) vite.kill(); };
+  const stopVite = () => {
+    if (!vite.killed) vite.kill();
+  };
   process.once('SIGINT', stopVite);
   process.once('SIGTERM', stopVite);
   try {
@@ -164,14 +207,33 @@ async function dev() {
 
 const [command = 'help', ...args] = process.argv.slice(2);
 switch (command) {
-  case 'install': install(); break;
-  case 'test': test(); break;
-  case 'frontend-build': frontendBuild(); break;
+  case 'install':
+    install();
+    break;
+  case 'test':
+    test();
+    break;
+  case 'check':
+    check();
+    break;
+  case 'format':
+    format(true);
+    break;
+  case 'format-check':
+    format(false);
+    break;
+  case 'frontend-build':
+    frontendBuild();
+    break;
   case 'preview':
     run(bun, [tool('vite', 'bin', 'vite.js'), 'preview', '--host', '127.0.0.1']);
     break;
-  case 'tauri': tauri(args); break;
-  case 'rust-check': rustCheck(); break;
+  case 'tauri':
+    tauri(args);
+    break;
+  case 'rust-check':
+    rustCheck();
+    break;
   case 'build':
     install();
     test();
@@ -179,7 +241,11 @@ switch (command) {
     tauri(['build', '--bundles', bundleName()]);
     copyReleaseArtifacts();
     break;
-  case 'dev': await dev(); break;
+  case 'dev':
+    await dev();
+    break;
   default:
-    console.log('Usage: bun scripts/tasks.mjs <install|test|frontend-build|rust-check|build|dev|preview|tauri>');
+    console.log(
+      'Usage: bun scripts/tasks.mjs <install|test|check|format|format-check|frontend-build|rust-check|build|dev|preview|tauri>',
+    );
 }

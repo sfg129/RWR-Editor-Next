@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import * as THREE from 'three';
-import { VoxelAnimationRig } from '../src/animation-rig';
-import { RwrModel, parseAnimations, serializeAnimations } from '../src/rwr-model';
+import { VoxelAnimationRig } from '../src/core/animation/animation-rig';
+import { RwrModel, parseAnimations, serializeAnimations } from '../src/core/model/rwr-model';
 
 const MODEL = `<?xml version="1.0" encoding="UTF-8"?>
 <model>
@@ -70,7 +70,9 @@ describe('RWR model compatibility', () => {
 
 describe('RWR animation format', () => {
   it('reads animation metadata and particle positions', () => {
-    const animations = parseAnimations(`<animations><animation loop="1" end="0.5" speed="1" comment="walk"><frame time="0"><position x="1" y="2" z="3"/></frame></animation></animations>`);
+    const animations = parseAnimations(
+      `<animations><animation loop="1" end="0.5" speed="1" comment="walk"><frame time="0"><position x="1" y="2" z="3"/></frame></animation></animations>`,
+    );
     expect(animations[0]).toMatchObject({ name: 'walk', loop: true, end: 0.5, speed: 1 });
     expect(animations[0]?.frames[0]?.positions[0]).toEqual({ x: 1, y: 2, z: 3 });
   });
@@ -80,7 +82,15 @@ describe('RWR animation format', () => {
     const rig = new VoxelAnimationRig(model);
     const position = new THREE.Vector3();
     const rotation = new THREE.Quaternion();
-    const transformed = rig.getPose(1, [{ x: 0, y: 0, z: 0 }, { x: 0, y: 4, z: 0 }], position, rotation);
+    const transformed = rig.getPose(
+      1,
+      [
+        { x: 0, y: 0, z: 0 },
+        { x: 0, y: 4, z: 0 },
+      ],
+      position,
+      rotation,
+    );
     const rotatedAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(rotation);
     expect(transformed).toBe(true);
     expect(rig.boundCount).toBe(2);
@@ -91,12 +101,20 @@ describe('RWR animation format', () => {
   });
 
   it('exports edited animations in the original compatible XML structure', () => {
-    const source = parseAnimations(`<animations><animation loop="1" end="0.5" speed="1.2" speed_spread="0.04" comment="edit test"><frame time="0"><position x="1" y="2" z="3"/></frame></animation></animations>`);
+    const source = parseAnimations(
+      `<animations><animation loop="1" end="0.5" speed="1.2" speed_spread="0.04" comment="edit test"><frame time="0"><position x="1" y="2" z="3"/></frame></animation></animations>`,
+    );
     source[0]!.name = 'edited name';
     source[0]!.frames.push({ time: 0.5, positions: [{ x: 4, y: 5, z: 6 }] });
     const output = serializeAnimations(source);
     const reparsed = parseAnimations(output);
-    expect(reparsed[0]).toMatchObject({ name: 'edited name', loop: true, end: 0.5, speed: 1.2, speedSpread: 0.04 });
+    expect(reparsed[0]).toMatchObject({
+      name: 'edited name',
+      loop: true,
+      end: 0.5,
+      speed: 1.2,
+      speedSpread: 0.04,
+    });
     expect(reparsed[0]?.frames[1]?.positions[0]).toEqual({ x: 4, y: 5, z: 6 });
   });
 });

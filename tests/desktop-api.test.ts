@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { createDesktopBridge, type InvokeCommand } from '../src/desktop-api';
+import { createDesktopBridge, type InvokeCommand } from '../src/platform/desktop-api';
 
 describe('Tauri desktop bridge', () => {
   it('maps platform-neutral file operations to isolated native commands', async () => {

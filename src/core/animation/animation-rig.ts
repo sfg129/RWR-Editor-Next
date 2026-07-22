@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import type { RwrModel } from './rwr-model';
-import type { Vec3 } from './types';
+import type { RwrModel } from '../model/rwr-model';
+import type { Vec3 } from '../types';
 
 const EPSILON = 1e-8;
 
@@ -73,7 +73,8 @@ export class VoxelAnimationRig {
       return true;
     }
 
-    const along = this.bindPoint.set(voxel.x, voxel.y, voxel.z).sub(this.bindA).dot(this.bindAxis) / bindLengthSquared;
+    const along =
+      this.bindPoint.set(voxel.x, voxel.y, voxel.z).sub(this.bindA).dot(this.bindAxis) / bindLengthSquared;
     this.bindPoint.copy(this.bindA).addScaledVector(this.bindAxis, along);
     this.radial.set(voxel.x, voxel.y, voxel.z).sub(this.bindPoint);
     this.bindDirection.copy(this.bindAxis).normalize();

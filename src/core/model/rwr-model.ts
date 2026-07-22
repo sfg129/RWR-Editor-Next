@@ -6,7 +6,7 @@ import type {
   SkeletonStick,
   Vec3,
   Voxel,
-} from './types';
+} from '../types';
 
 const serializer = new XMLSerializer();
 
@@ -95,7 +95,9 @@ export class RwrModel {
 
     const bindingsElement = directChild(root, 'skeletonVoxelBindings');
     if (bindingsElement) {
-      for (const groupElement of Array.from(bindingsElement.children).filter((node) => node.tagName === 'group')) {
+      for (const groupElement of Array.from(bindingsElement.children).filter(
+        (node) => node.tagName === 'group',
+      )) {
         const ids = new Set<string>();
         for (const ref of Array.from(groupElement.children).filter((node) => node.tagName === 'voxel')) {
           const index = intAttr(ref, 'index', -1);
@@ -109,13 +111,19 @@ export class RwrModel {
   }
 
   static createNew(baseVoxels: 1 | 8): RwrModel {
-    const positions: Vec3[] = baseVoxels === 1
-      ? [{ x: 0, y: 0, z: 0 }]
-      : [0, 1].flatMap((x) => [0, 1].flatMap((y) => [0, 1].map((z) => ({ x, y, z }))));
-    const voxels = positions.map(({ x, y, z }) =>
-      `    <voxel x="${x}" y="${y}" z="${z}" r="0.450980" g="0.549020" b="0.270588" a="1.000000"/>`,
-    ).join('\n');
-    return RwrModel.parse(`<?xml version="1.0" encoding="UTF-8"?>\n<model>\n  <voxels>\n${voxels}\n  </voxels>\n  <skeleton/>\n  <skeletonVoxelBindings/>\n</model>`);
+    const positions: Vec3[] =
+      baseVoxels === 1
+        ? [{ x: 0, y: 0, z: 0 }]
+        : [0, 1].flatMap((x) => [0, 1].flatMap((y) => [0, 1].map((z) => ({ x, y, z }))));
+    const voxels = positions
+      .map(
+        ({ x, y, z }) =>
+          `    <voxel x="${x}" y="${y}" z="${z}" r="0.450980" g="0.549020" b="0.270588" a="1.000000"/>`,
+      )
+      .join('\n');
+    return RwrModel.parse(
+      `<?xml version="1.0" encoding="UTF-8"?>\n<model>\n  <voxels>\n${voxels}\n  </voxels>\n  <skeleton/>\n  <skeletonVoxelBindings/>\n</model>`,
+    );
   }
 
   get bounds(): { min: Vec3; max: Vec3; center: Vec3 } {
@@ -125,8 +133,12 @@ export class RwrModel {
     const min = { x: Infinity, y: Infinity, z: Infinity };
     const max = { x: -Infinity, y: -Infinity, z: -Infinity };
     for (const voxel of this.voxels) {
-      min.x = Math.min(min.x, voxel.x); min.y = Math.min(min.y, voxel.y); min.z = Math.min(min.z, voxel.z);
-      max.x = Math.max(max.x, voxel.x); max.y = Math.max(max.y, voxel.y); max.z = Math.max(max.z, voxel.z);
+      min.x = Math.min(min.x, voxel.x);
+      min.y = Math.min(min.y, voxel.y);
+      min.z = Math.min(min.z, voxel.z);
+      max.x = Math.max(max.x, voxel.x);
+      max.y = Math.max(max.y, voxel.y);
+      max.z = Math.max(max.z, voxel.z);
     }
     return {
       min,
@@ -138,7 +150,10 @@ export class RwrModel {
   snapshot(): EditorSnapshot {
     return {
       voxels: this.voxels.map(cloneVoxel),
-      bindings: this.bindings.map((group) => ({ constraintIndex: group.constraintIndex, voxelIds: [...group.voxelIds] })),
+      bindings: this.bindings.map((group) => ({
+        constraintIndex: group.constraintIndex,
+        voxelIds: [...group.voxelIds],
+      })),
     };
   }
 
@@ -152,7 +167,9 @@ export class RwrModel {
   }
 
   hasVoxelAt(x: number, y: number, z: number, excluding = new Set<string>()): boolean {
-    return this.voxels.some((voxel) => !excluding.has(voxel.id) && voxel.x === x && voxel.y === y && voxel.z === z);
+    return this.voxels.some(
+      (voxel) => !excluding.has(voxel.id) && voxel.x === x && voxel.y === y && voxel.z === z,
+    );
   }
 
   addVoxel(position: Vec3, color: { r: number; g: number; b: number; a?: number }): Voxel | null {
@@ -189,7 +206,9 @@ export class RwrModel {
       if (this.hasVoxelAt(voxel.x + delta.x, voxel.y + delta.y, voxel.z + delta.z, ids)) return false;
     }
     for (const voxel of selected) {
-      voxel.x += delta.x; voxel.y += delta.y; voxel.z += delta.z;
+      voxel.x += delta.x;
+      voxel.y += delta.y;
+      voxel.z += delta.z;
     }
     this.dirty = true;
     return true;
@@ -199,7 +218,10 @@ export class RwrModel {
     let count = 0;
     for (const voxel of this.voxels) {
       if (!ids.has(voxel.id)) continue;
-      voxel.r = color.r; voxel.g = color.g; voxel.b = color.b; count += 1;
+      voxel.r = color.r;
+      voxel.g = color.g;
+      voxel.b = color.b;
+      count += 1;
     }
     if (count) this.dirty = true;
     return count;
@@ -208,7 +230,10 @@ export class RwrModel {
   rebindSkeleton(): number {
     if (!this.skeleton.length || !this.sticks.length) return 0;
     const particles = new Map(this.skeleton.map((particle) => [particle.id, particle]));
-    this.bindings = this.sticks.map((_, constraintIndex) => ({ constraintIndex, voxelIds: new Set<string>() }));
+    this.bindings = this.sticks.map((_, constraintIndex) => ({
+      constraintIndex,
+      voxelIds: new Set<string>(),
+    }));
     for (const voxel of this.voxels) {
       let bestIndex = 0;
       let bestDistance = Infinity;
@@ -217,7 +242,10 @@ export class RwrModel {
         const b = particles.get(stick.b);
         if (!a || !b) return;
         const distance = pointSegmentDistanceSquared(voxel, a, b);
-        if (distance < bestDistance) { bestDistance = distance; bestIndex = index; }
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = index;
+        }
       });
       this.bindings[bestIndex]?.voxelIds.add(voxel.id);
     }
@@ -275,7 +303,8 @@ function pointSegmentDistanceSquared(point: Vec3, a: Vec3, b: Vec3): number {
   const ab = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z };
   const ap = { x: point.x - a.x, y: point.y - a.y, z: point.z - a.z };
   const denominator = ab.x * ab.x + ab.y * ab.y + ab.z * ab.z;
-  const t = denominator === 0 ? 0 : Math.max(0, Math.min(1, (ap.x * ab.x + ap.y * ab.y + ap.z * ab.z) / denominator));
+  const t =
+    denominator === 0 ? 0 : Math.max(0, Math.min(1, (ap.x * ab.x + ap.y * ab.y + ap.z * ab.z) / denominator));
   const dx = point.x - (a.x + ab.x * t);
   const dy = point.y - (a.y + ab.y * t);
   const dz = point.z - (a.z + ab.z * t);
@@ -287,7 +316,9 @@ export function parseAnimations(text: string): RwrAnimation[] {
   const parserError = document.querySelector('parsererror');
   if (parserError) throw new Error('动画 XML 解析失败。');
   const animations: RwrAnimation[] = [];
-  for (const animation of Array.from(document.documentElement.children).filter((node) => node.tagName === 'animation')) {
+  for (const animation of Array.from(document.documentElement.children).filter(
+    (node) => node.tagName === 'animation',
+  )) {
     const frames = Array.from(animation.children)
       .filter((node) => node.tagName === 'frame')
       .map((frame) => ({
@@ -295,7 +326,9 @@ export function parseAnimations(text: string): RwrAnimation[] {
         positions: Array.from(frame.children)
           .filter((node) => node.tagName === 'position')
           .map((position) => ({
-            x: numberAttr(position, 'x'), y: numberAttr(position, 'y'), z: numberAttr(position, 'z'),
+            x: numberAttr(position, 'x'),
+            y: numberAttr(position, 'y'),
+            z: numberAttr(position, 'z'),
           })),
       }));
     animations.push({
@@ -318,7 +351,8 @@ export function serializeAnimations(animations: RwrAnimation[]): string {
     animationNode.setAttribute('loop', animation.loop ? '1' : '0');
     animationNode.setAttribute('end', animation.end.toFixed(6));
     animationNode.setAttribute('speed', animation.speed.toFixed(6));
-    if (animation.speedSpread !== 0) animationNode.setAttribute('speed_spread', animation.speedSpread.toFixed(6));
+    if (animation.speedSpread !== 0)
+      animationNode.setAttribute('speed_spread', animation.speedSpread.toFixed(6));
     animationNode.setAttribute('comment', animation.name);
     for (const frame of [...animation.frames].sort((a, b) => a.time - b.time)) {
       const frameNode = document.createElement('frame');
