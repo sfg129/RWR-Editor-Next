@@ -5,8 +5,7 @@ import { VoxelAnimationRig } from '../core/animation/animation-rig';
 import { sampleAnimationPositions } from '../core/animation/sample-animation';
 import { cameraRelativeMotion } from '../core/camera/camera-motion';
 import { RwrModel, parseAnimations } from '../core/model/rwr-model';
-import type { RwrAnimation, Vec3 } from '../core/types';
-import { currentLanguage } from '../i18n/runtime';
+import type { RwrAnimation } from '../core/types';
 import { isNativeControlTarget, isTextEntryTarget, releasePressedActions } from './focus-policy';
 
 type NoticeKind = 'success' | 'warning' | 'normal';
@@ -69,30 +68,6 @@ function child<T extends Element>(root: ParentNode, selector: string): T {
   return found;
 }
 
-function rounded(value: number): number {
-  return Number(value.toFixed(4));
-}
-
-function vectorRecord(vector: THREE.Vector3): Vec3 {
-  return { x: rounded(vector.x), y: rounded(vector.y), z: rounded(vector.z) };
-}
-
-async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand('copy');
-  textarea.remove();
-  if (!copied) throw new Error('当前系统不允许写入剪贴板。');
-}
-
 export class CharacterPreviewController {
   private readonly viewport: HTMLDivElement;
   private readonly closeButton: HTMLButtonElement;
@@ -104,7 +79,6 @@ export class CharacterPreviewController {
   private readonly voxelSizeValue: HTMLOutputElement;
   private readonly fixedCameraInput: HTMLInputElement;
   private readonly cameraHint: HTMLElement;
-  private readonly exportButton: HTMLButtonElement;
   private readonly status: HTMLElement;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(38, 1, 0.1, 1200);
@@ -162,7 +136,6 @@ export class CharacterPreviewController {
     this.voxelSizeValue = child(root, '#characterPreviewVoxelSizeValue');
     this.fixedCameraInput = child(root, '#characterPreviewFixedCamera');
     this.cameraHint = child(root, '#characterPreviewCameraHint');
-    this.exportButton = child(root, '#exportCharacterPreviewBtn');
     this.status = child(root, '#characterPreviewStatus');
 
     this.scene.background = new THREE.Color(0x8fb9d0);
@@ -273,7 +246,6 @@ export class CharacterPreviewController {
       this.applyPose();
     });
     this.fixedCameraInput.addEventListener('change', () => this.applyCameraMode());
-    this.exportButton.addEventListener('click', () => void this.exportSettings());
 
     this.renderer.domElement.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
@@ -474,10 +446,10 @@ export class CharacterPreviewController {
   private applyCameraMode(): void {
     const fixed = this.fixedCameraInput.checked;
     this.releaseInput();
-    this.controls.enabled = true;
+    this.controls.enabled = !fixed;
     this.controls.enableRotate = false;
     this.controls.enablePan = !fixed;
-    this.controls.enableZoom = true;
+    this.controls.enableZoom = !fixed;
     if (fixed) {
       this.camera.position.copy(this.fixedPosition);
       this.controls.target.copy(this.fixedTarget);
@@ -488,7 +460,7 @@ export class CharacterPreviewController {
       this.camera.lookAt(this.fixedTarget);
     }
     this.cameraHint.textContent = fixed
-      ? '固定镜头 · 左键拖动旋转人物模型 · 滚轮缩放'
+      ? '固定镜头 · 左键拖动旋转人物模型'
       : 'WASD 移动 · Shift 加速 · 左键转动视角 · 滚轮缩放';
     this.viewport.dataset.fixedCamera = String(fixed);
     this.viewport.focus({ preventScroll: true });
@@ -536,61 +508,6 @@ export class CharacterPreviewController {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-  }
-
-  private async exportSettings(): Promise<void> {
-    if (!this.model || !this.rig) return;
-    const presetName = this.lightingSelect.value as LightingPreset;
-    const preset = lightingPresets[presetName] ?? lightingPresets.standard;
-    const payload = {
-      schema: 'rwr-editor-next/character-preview-preset',
-      version: 1,
-      animation: { name: this.animation.name, loop: true, speed: this.animation.speed },
-      model: {
-        voxels: this.model.voxels.length,
-        skeletonParticles: this.model.skeleton.length,
-        boundVoxels: this.rig.boundCount,
-        rotationY: rounded(this.characterGroup.rotation.y),
-      },
-      camera: {
-        fixed: this.fixedCameraInput.checked,
-        position: vectorRecord(this.camera.position),
-        target: vectorRecord(this.controls.target),
-        fov: rounded(this.camera.fov),
-        near: rounded(this.camera.near),
-        far: rounded(this.camera.far),
-      },
-      rendering: {
-        voxelSize: rounded(Number(this.voxelSizeInput.value)),
-        pixelRatio: rounded(this.renderer.getPixelRatio()),
-        shadows: this.renderer.shadowMap.enabled,
-      },
-      lighting: {
-        preset: presetName,
-        hemisphere: preset.hemisphere,
-        fill: preset.fill,
-        key: preset.key,
-        rim: preset.rim,
-        exposure: preset.exposure,
-        keyPosition: vectorRecord(this.keyLight.position),
-        rimPosition: vectorRecord(this.rimLight.position),
-      },
-      world: { groundColor: '#4f7d35', skyColor: '#8fb9d0' },
-    };
-    const title =
-      currentLanguage() === 'en'
-        ? 'RWR Editor Next Character Preview Settings'
-        : 'RWR Editor Next 人物模型预览设定';
-    const text = `${title}\n${JSON.stringify(payload, null, 2)}`;
-    try {
-      await copyText(text);
-      this.status.textContent = '预览设定已写入剪贴板，可以直接粘贴发送。';
-      this.options.notify('人物预览设定已复制到剪贴板。', 'success');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '无法写入剪贴板。';
-      this.status.textContent = message;
-      this.options.notify(message, 'warning');
-    }
   }
 
   private animate(now: number): void {

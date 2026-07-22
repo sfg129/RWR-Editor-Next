@@ -76,12 +76,7 @@
             <p>固定后禁用镜头移动；左键拖动可旋转人物模型。</p>
           </section>
 
-          <div class="preview-export-block">
-            <button id="exportCharacterPreviewBtn" class="button primary full" type="button">
-              导出预览设定到剪贴板
-            </button>
-            <p id="characterPreviewStatus">参数用于确定后续固定的游戏化预览视角。</p>
-          </div>
+          <p id="characterPreviewStatus" class="preview-status" aria-live="polite" />
         </aside>
       </div>
     </section>

@@ -1651,15 +1651,13 @@ input[type='range'] {
   padding: 9px 10px;
 }
 .preview-camera-control p,
-.preview-export-block p {
+.preview-status {
   margin: 0;
   color: var(--dim);
   font-size: 0.64rem;
   line-height: 1.5;
 }
-.preview-export-block {
-  display: grid;
-  gap: 9px;
+.preview-status {
   margin-top: 13px;
   padding-top: 13px;
   border-top: 1px solid var(--border);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { currentLanguage, initializeLocalization, setLanguage, translate } from '../src/i18n/runtime';
+import { initializeLocalization, setLanguage, translate } from '../src/i18n/runtime';
 
 describe('runtime localization', () => {
   it('translates catalog and dynamic editor text', () => {
@@ -7,8 +7,8 @@ describe('runtime localization', () => {
     expect(translate('已选择 12 个体素')).toBe('12 voxels selected');
     expect(translate('第 3 帧 · 0.250s')).toBe('Frame 3 · 0.250s');
     expect(translate('柔和')).toBe('Soft');
-    expect(translate('固定镜头 · 左键拖动旋转人物模型 · 滚轮缩放')).toBe(
-      'Fixed camera · Left drag rotates the character · Wheel zoom',
+    expect(translate('固定镜头 · 左键拖动旋转人物模型')).toBe(
+      'Fixed camera · Left drag rotates the character',
     );
     expect(translate('1552 个已绑定体素正在跟随 running 动画。')).toBe(
       '1552 bound voxels are following the running animation.',
@@ -22,8 +22,6 @@ describe('runtime localization', () => {
     document.body.innerHTML = '<button title="设置">打开模型</button>   <p id="status">就绪</p>';
     initializeLocalization('en');
 
-    expect(currentLanguage()).toBe('en');
-
     expect(document.querySelector('button')?.textContent).toBe('Open Model');
     expect(document.querySelector('button')?.title).toBe('Settings');
     expect(document.querySelector('#status')?.textContent).toBe('Ready');
@@ -34,7 +32,6 @@ describe('runtime localization', () => {
     expect(document.querySelector('#status')?.textContent).toBe('4 voxels selected');
 
     setLanguage('zh-CN');
-    expect(currentLanguage()).toBe('zh-CN');
     expect(document.querySelector('button')?.textContent).toBe('打开模型');
     expect(document.querySelector('#status')?.textContent).toBe('已选择 4 个体素');
   });
