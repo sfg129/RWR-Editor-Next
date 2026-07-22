@@ -7,8 +7,8 @@ describe('runtime localization', () => {
     expect(translate('已选择 12 个体素')).toBe('12 voxels selected');
     expect(translate('第 3 帧 · 0.250s')).toBe('Frame 3 · 0.250s');
     expect(translate('柔和')).toBe('Soft');
-    expect(translate('固定镜头 · 左键拖动旋转人物模型')).toBe(
-      'Fixed camera · Left drag rotates the character',
+    expect(translate('固定镜头 · 左键拖动旋转人物模型 · 滚轮缩放')).toBe(
+      'Fixed camera · Left drag rotates the character · Wheel zoom',
     );
     expect(translate('1552 个已绑定体素正在跟随 running 动画。')).toBe(
       '1552 bound voxels are following the running animation.',

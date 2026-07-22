@@ -7,6 +7,11 @@ export function isTextEntryTarget(target: EventTarget | null): boolean {
   return Boolean(input && TEXT_INPUT_TYPES.has(input.type));
 }
 
+export function isNativeControlTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest('button,input,select,textarea,label,[contenteditable="true"]'));
+}
+
 export function releasePressedActions<T>(actions: Set<T>): void {
   actions.clear();
 }

@@ -7,7 +7,7 @@ import { cameraRelativeMotion } from '../core/camera/camera-motion';
 import { RwrModel, parseAnimations } from '../core/model/rwr-model';
 import type { RwrAnimation, Vec3 } from '../core/types';
 import { currentLanguage } from '../i18n/runtime';
-import { isTextEntryTarget } from './focus-policy';
+import { isNativeControlTarget, isTextEntryTarget, releasePressedActions } from './focus-policy';
 
 type NoticeKind = 'success' | 'warning' | 'normal';
 type LightingPreset = 'soft' | 'standard' | 'bright' | 'color';
@@ -255,7 +255,11 @@ export class CharacterPreviewController {
     this.options.trigger.addEventListener('click', () => (this.isOpen() ? this.close() : this.open()));
     this.closeButton.addEventListener('click', () => this.close());
     this.options.root.addEventListener('pointerdown', (event) => {
+      if (isNativeControlTarget(event.target)) this.releaseInput();
       if (event.target === this.options.root) this.close();
+    });
+    this.options.root.addEventListener('focusin', (event) => {
+      if (isNativeControlTarget(event.target)) this.releaseInput();
     });
     this.lightingSelect.addEventListener('change', () => this.applyLighting());
     this.animationSelect.addEventListener('change', () => {
@@ -351,7 +355,7 @@ export class CharacterPreviewController {
   }
 
   private releaseInput(): void {
-    this.pressed.clear();
+    releasePressedActions(this.pressed);
     this.shiftHeld = false;
     this.rotatingModel = false;
     this.cameraLookActive = false;
@@ -470,8 +474,10 @@ export class CharacterPreviewController {
   private applyCameraMode(): void {
     const fixed = this.fixedCameraInput.checked;
     this.releaseInput();
-    this.controls.enabled = !fixed;
+    this.controls.enabled = true;
     this.controls.enableRotate = false;
+    this.controls.enablePan = !fixed;
+    this.controls.enableZoom = true;
     if (fixed) {
       this.camera.position.copy(this.fixedPosition);
       this.controls.target.copy(this.fixedTarget);
@@ -482,7 +488,7 @@ export class CharacterPreviewController {
       this.camera.lookAt(this.fixedTarget);
     }
     this.cameraHint.textContent = fixed
-      ? '固定镜头 · 左键拖动旋转人物模型'
+      ? '固定镜头 · 左键拖动旋转人物模型 · 滚轮缩放'
       : 'WASD 移动 · Shift 加速 · 左键转动视角 · 滚轮缩放';
     this.viewport.dataset.fixedCamera = String(fixed);
     this.viewport.focus({ preventScroll: true });

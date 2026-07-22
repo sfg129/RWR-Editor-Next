@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { isTextEntryTarget, releasePressedActions } from '../src/editor/focus-policy';
+import { isNativeControlTarget, isTextEntryTarget, releasePressedActions } from '../src/editor/focus-policy';
 
 describe('camera keyboard focus policy', () => {
   it('keeps camera shortcuts active for selects and non-text controls', () => {
@@ -24,6 +24,13 @@ describe('camera keyboard focus policy', () => {
 
   it('releases latched directions when a native control takes focus', () => {
     const pressed = new Set(['cameraForward', 'cameraLeft']);
+    const select = document.createElement('select');
+    const checkboxLabel = document.createElement('label');
+    const viewport = document.createElement('div');
+
+    expect(isNativeControlTarget(select)).toBe(true);
+    expect(isNativeControlTarget(checkboxLabel)).toBe(true);
+    expect(isNativeControlTarget(viewport)).toBe(false);
 
     releasePressedActions(pressed);
 

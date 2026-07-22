@@ -218,7 +218,7 @@ const englishMessages: Record<string, string> = {
   预览光照: 'Preview lighting',
   体素渲染尺寸: 'Voxel render size',
   固定镜头: 'Fixed camera',
-  '固定镜头 · 左键拖动旋转人物模型': 'Fixed camera · Left drag rotates the character',
+  '固定镜头 · 左键拖动旋转人物模型 · 滚轮缩放': 'Fixed camera · Left drag rotates the character · Wheel zoom',
   固定后禁用镜头移动左键拖动可旋转人物模型:
     'Fixed mode disables camera movement; left drag rotates the character.',
   导出预览设定到剪贴板: 'Copy Preview Settings',
