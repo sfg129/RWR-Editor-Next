@@ -36,6 +36,10 @@
       "icons/icon.ico"
     ],
     "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      },
       "webviewInstallMode": {
         "type": "embedBootstrapper"
       }
