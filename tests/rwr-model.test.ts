@@ -18,6 +18,33 @@ const MODEL = `<?xml version="1.0" encoding="UTF-8"?>
   <skeletonVoxelBindings><group constraintIndex="0"><voxel index="0"/><voxel index="1"/></group></skeletonVoxelBindings>
 </model>`;
 
+const TORSO_MODEL = `<?xml version="1.0" encoding="UTF-8"?>
+<model>
+  <voxels>
+    <voxel x="-1" y="1" z="2" r="1" g="0" b="0" a="1" />
+    <voxel x="1" y="1" z="2" r="0" g="1" b="0" a="1" />
+    <voxel x="0" y="3" z="0" r="0" g="0" b="1" a="1" />
+    <voxel x="0" y="3.5" z="0" r="1" g="1" b="0" a="1" />
+  </voxels>
+  <skeleton>
+    <particle id="rh" name="righthip" x="-1" y="0" z="0" />
+    <particle id="lh" name="lefthip" x="1" y="0" z="0" />
+    <particle id="ms" name="midspine" x="0" y="1" z="0" />
+    <particle id="rs" name="rightshoulder" x="-2" y="2" z="0" />
+    <particle id="ls" name="leftshoulder" x="2" y="2" z="0" />
+    <particle id="n" name="neck" x="0" y="3" z="0" />
+    <particle id="h" name="head" x="0" y="4" z="0" />
+    <stick a="rh" b="ms" />
+    <stick a="lh" b="ms" />
+    <stick a="n" b="h" />
+  </skeleton>
+  <skeletonVoxelBindings>
+    <group constraintIndex="0"><voxel index="0"/><voxel index="2"/></group>
+    <group constraintIndex="1"><voxel index="1"/></group>
+    <group constraintIndex="2"><voxel index="3"/></group>
+  </skeletonVoxelBindings>
+</model>`;
+
 describe('RWR model compatibility', () => {
   it('reads transparent voxels without turning alpha zero into one', () => {
     const model = RwrModel.parse(MODEL);
@@ -91,13 +118,82 @@ describe('RWR animation format', () => {
       position,
       rotation,
     );
-    const rotatedAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(rotation);
     expect(transformed).toBe(true);
     expect(rig.boundCount).toBe(2);
     expect(position.x).toBeCloseTo(0);
     expect(position.y).toBeCloseTo(2);
-    expect(rotatedAxis.x).toBeCloseTo(0);
-    expect(rotatedAxis.y).toBeCloseTo(1);
+    expect(rotation.equals(new THREE.Quaternion())).toBe(true);
+  });
+
+  it('keeps an off-axis voxel offset stable instead of splitting adjacent body groups', () => {
+    const model = RwrModel.parse(
+      MODEL.replace(
+        '<voxel x="1" y="0" z="0" r="0" g="1" b="0" a="1" />',
+        '<voxel x="1" y="1" z="0" r="0" g="1" b="0" a="1" />',
+      ),
+    );
+    const rig = new VoxelAnimationRig(model);
+    const position = new THREE.Vector3();
+    const rotation = new THREE.Quaternion();
+
+    expect(
+      rig.getPose(
+        1,
+        [
+          { x: 0, y: 0, z: 0 },
+          { x: 0, y: 4, z: 0 },
+        ],
+        position,
+        rotation,
+      ),
+    ).toBe(true);
+    expect(position.toArray()).toEqual([0, 3, 0]);
+    expect(rotation.equals(new THREE.Quaternion())).toBe(true);
+  });
+
+  it('moves torso binding groups with one rigid frame when the landmarks deform asymmetrically', () => {
+    const model = RwrModel.parse(TORSO_MODEL);
+    const rig = new VoxelAnimationRig(model);
+    const animatedPositions = [
+      { x: -0.7, y: 0.2, z: -0.8 },
+      { x: 0.8, y: -0.1, z: 0.9 },
+      { x: 0.2, y: 1.3, z: 0.1 },
+      { x: -1.5, y: 2.4, z: -1.2 },
+      { x: 1.7, y: 1.8, z: 1.4 },
+      { x: 0.3, y: 3.1, z: 0.2 },
+      { x: 1.1, y: 4.5, z: 1.8 },
+    ];
+    const leftPosition = new THREE.Vector3();
+    const rightPosition = new THREE.Vector3();
+    const leftRotation = new THREE.Quaternion();
+    const rightRotation = new THREE.Quaternion();
+
+    expect(rig.getPose(0, animatedPositions, leftPosition, leftRotation)).toBe(true);
+    expect(rig.getPose(1, animatedPositions, rightPosition, rightRotation)).toBe(true);
+
+    expect(leftPosition.distanceTo(rightPosition)).toBeCloseTo(2);
+    expect(leftRotation.angleTo(rightRotation)).toBeCloseTo(0);
+  });
+
+  it('anchors the rigid head to the torso neck even when the raw neck pose drifts', () => {
+    const model = RwrModel.parse(TORSO_MODEL);
+    const rig = new VoxelAnimationRig(model);
+    const animatedPositions = [
+      { x: -0.7, y: 0.2, z: -0.8 },
+      { x: 0.8, y: -0.1, z: 0.9 },
+      { x: 0.2, y: 1.3, z: 0.1 },
+      { x: -1.5, y: 2.4, z: -1.2 },
+      { x: 1.7, y: 1.8, z: 1.4 },
+      { x: 2.3, y: 4.1, z: 2.2 },
+      { x: 3.1, y: 5.5, z: 3.8 },
+    ];
+    const torsoNeckPosition = new THREE.Vector3();
+    const headBasePosition = new THREE.Vector3();
+
+    expect(rig.getPose(2, animatedPositions, torsoNeckPosition, new THREE.Quaternion())).toBe(true);
+    expect(rig.getPose(3, animatedPositions, headBasePosition, new THREE.Quaternion())).toBe(true);
+
+    expect(torsoNeckPosition.distanceTo(headBasePosition)).toBeCloseTo(0.5);
   });
 
   it('exports edited animations in the original compatible XML structure', () => {
