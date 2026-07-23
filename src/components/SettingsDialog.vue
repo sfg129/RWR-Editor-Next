@@ -170,7 +170,7 @@ const shortcuts = [
           <section class="settings-page" data-page="language">
             <h3>语言</h3>
             <div class="setting">
-              <div><strong>界面语言</strong><small>后续可添加语言包而不改动核心</small></div>
+              <div><strong>界面语言</strong><small></small></div>
               <select id="languageSetting">
                 <option value="zh-CN">简体中文</option>
                 <option value="en">English</option>
