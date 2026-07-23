@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
+    <script>
+      try {
+        const settings = JSON.parse(localStorage.getItem('rwr-editor-settings-v1') || '{}');
+        const root = document.documentElement;
+        root.dataset.theme = settings.theme === 'light' ? 'light' : 'dark';
+        root.style.setProperty('--accent', settings.accent || '#f0b84b');
+        root.style.setProperty('--app-brightness', `${settings.brightness || 100}%`);
+        root.style.setProperty('--ui-scale', String((settings.uiScale || 100) / 100));
+        root.style.setProperty('--font-size', `${settings.fontSize || 16}px`);
+      } catch {}
+    </script>
     <title>RWR 体素编辑器</title>
   </head>
   <body>

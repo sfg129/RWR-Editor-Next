@@ -1,4 +1,16 @@
 <script setup lang="ts">
+import { isTauriRuntime, openExternalUrl } from '../platform/external-links';
+
+const repositoryUrl = 'https://github.com/sfg129/RWR-Editor-Next';
+
+function handleRepositoryClick(event: MouseEvent): void {
+  if (!isTauriRuntime()) return;
+  event.preventDefault();
+  void openExternalUrl(repositoryUrl).catch((error: unknown) => {
+    console.warn('Unable to open the repository URL.', error);
+  });
+}
+
 const shortcuts = [
   ['newModel', '新建模型'],
   ['openModel', '打开模型'],
@@ -169,8 +181,8 @@ const shortcuts = [
           </section>
           <section class="settings-page" data-page="language">
             <h3>语言</h3>
-            <div class="setting">
-              <div><strong>界面语言</strong><small></small></div>
+            <div class="setting single-line-setting">
+              <div><strong>界面语言</strong></div>
               <select id="languageSetting">
                 <option value="zh-CN">简体中文</option>
                 <option value="en">English</option>
@@ -193,9 +205,10 @@ const shortcuts = [
             </p>
             <a
               class="button about-repository-link"
-              href="https://github.com/sfg129/RWR-Editor-Next"
+              :href="repositoryUrl"
               target="_blank"
               rel="noopener noreferrer"
+              @click="handleRepositoryClick"
               >访问 GitHub 仓库</a
             >
           </section>

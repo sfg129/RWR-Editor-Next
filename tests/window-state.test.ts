@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { serializeWindowState, shouldStartMaximized } from '../src/platform/window-state';
+import { saveWindowState, serializeWindowState, shouldStartMaximized } from '../src/platform/window-state';
 
 describe('desktop window state', () => {
   it('maximizes on the first launch and for invalid saved data', () => {
@@ -11,5 +11,16 @@ describe('desktop window state', () => {
   it('restores the maximized state saved at the previous close', () => {
     expect(shouldStartMaximized(serializeWindowState(true))).toBe(true);
     expect(shouldStartMaximized(serializeWindowState(false))).toBe(false);
+  });
+
+  it('persists the latest maximized state', () => {
+    const stored = new Map<string, string>();
+    const storage = {
+      setItem: (key: string, value: string) => stored.set(key, value),
+    };
+
+    saveWindowState(storage, true);
+
+    expect([...stored.values()]).toEqual([serializeWindowState(true)]);
   });
 });

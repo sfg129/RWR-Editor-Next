@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Default permissions for the RWR Editor main window","local":true,"windows":["main"],"permissions":["core:default","dialog:default"]}}
+{"default":{"identifier":"default","description":"Default permissions for the RWR Editor main window","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-maximize","core:window:allow-unmaximize","dialog:default",{"identifier":"opener:allow-open-url","allow":[{"url":"https://github.com/sfg129/RWR-Editor-Next"}]}]}}

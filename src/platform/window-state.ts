@@ -19,6 +19,10 @@ export function serializeWindowState(maximized: boolean): string {
   return JSON.stringify({ version: 1, maximized } satisfies SavedWindowState);
 }
 
+export function saveWindowState(storage: Pick<Storage, 'setItem'>, maximized: boolean): void {
+  storage.setItem(WINDOW_STATE_KEY, serializeWindowState(maximized));
+}
+
 export async function initializeWindowState(): Promise<void> {
   if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
 
@@ -26,12 +30,21 @@ export async function initializeWindowState(): Promise<void> {
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
     const appWindow = getCurrentWindow();
     const savedState = localStorage.getItem(WINDOW_STATE_KEY);
+    let lastSavedMaximized: boolean | undefined;
 
     if (shouldStartMaximized(savedState)) await appWindow.maximize();
     else if (await appWindow.isMaximized()) await appWindow.unmaximize();
 
-    await appWindow.onCloseRequested(async () => {
-      localStorage.setItem(WINDOW_STATE_KEY, serializeWindowState(await appWindow.isMaximized()));
+    const persistCurrentState = async (): Promise<void> => {
+      const maximized = await appWindow.isMaximized();
+      if (maximized === lastSavedMaximized) return;
+      saveWindowState(localStorage, maximized);
+      lastSavedMaximized = maximized;
+    };
+
+    await persistCurrentState();
+    await appWindow.onResized(() => {
+      void persistCurrentState();
     });
   } catch (error) {
     console.warn('Unable to restore the desktop window state.', error);
