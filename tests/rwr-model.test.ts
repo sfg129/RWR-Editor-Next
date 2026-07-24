@@ -25,6 +25,7 @@ const TORSO_MODEL = `<?xml version="1.0" encoding="UTF-8"?>
     <voxel x="1" y="1" z="2" r="0" g="1" b="0" a="1" />
     <voxel x="0" y="3" z="0" r="0" g="0" b="1" a="1" />
     <voxel x="0" y="3.5" z="0" r="1" g="1" b="0" a="1" />
+    <voxel x="0" y="-1" z="1" r="1" g="0" b="1" a="1" />
   </voxels>
   <skeleton>
     <particle id="rh" name="righthip" x="-1" y="0" z="0" />
@@ -37,11 +38,13 @@ const TORSO_MODEL = `<?xml version="1.0" encoding="UTF-8"?>
     <stick a="rh" b="ms" />
     <stick a="lh" b="ms" />
     <stick a="n" b="h" />
+    <stick a="rh" b="lh" />
   </skeleton>
   <skeletonVoxelBindings>
     <group constraintIndex="0"><voxel index="0"/><voxel index="2"/></group>
     <group constraintIndex="1"><voxel index="1"/></group>
     <group constraintIndex="2"><voxel index="3"/></group>
+    <group constraintIndex="3"><voxel index="4"/></group>
   </skeletonVoxelBindings>
 </model>`;
 
@@ -173,6 +176,27 @@ describe('RWR animation format', () => {
 
     expect(leftPosition.distanceTo(rightPosition)).toBeCloseTo(2);
     expect(leftRotation.angleTo(rightRotation)).toBeCloseTo(0);
+  });
+
+  it('keeps the pelvis binding on the hip constraint instead of locking it to the torso', () => {
+    const model = RwrModel.parse(TORSO_MODEL);
+    const rig = new VoxelAnimationRig(model);
+    const animatedPositions = [
+      { x: -1, y: -2, z: 4 },
+      { x: 1, y: -2, z: 4 },
+      { x: 0, y: 2, z: 0 },
+      { x: -2, y: 3, z: 0 },
+      { x: 2, y: 3, z: 0 },
+      { x: 0, y: 4, z: 0 },
+      { x: 0, y: 5, z: 0 },
+    ];
+    const pelvisPosition = new THREE.Vector3();
+    const pelvisRotation = new THREE.Quaternion();
+
+    expect(rig.getPose(4, animatedPositions, pelvisPosition, pelvisRotation)).toBe(true);
+
+    expect(pelvisPosition.toArray()).toEqual([0, -3, 5]);
+    expect(pelvisRotation.equals(new THREE.Quaternion())).toBe(true);
   });
 
   it('anchors the rigid head to the torso neck even when the raw neck pose drifts', () => {

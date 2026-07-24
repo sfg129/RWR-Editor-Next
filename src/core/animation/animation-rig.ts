@@ -195,13 +195,22 @@ export class VoxelAnimationRig {
 
     this.torsoLandmarks = findTorsoLandmarks(model);
     if (this.torsoLandmarks) {
+      const rightHipId = model.skeleton[this.torsoLandmarks.rightHip]?.id;
+      const leftHipId = model.skeleton[this.torsoLandmarks.leftHip]?.id;
       const torsoParticleIds = new Set(
         model.skeleton
           .filter((particle) => TORSO_PARTICLE_NAMES.has(normalizedParticleName(particle.name)))
           .map((particle) => particle.id),
       );
       model.sticks.forEach((stick, index) => {
-        if (torsoParticleIds.has(stick.a) && torsoParticleIds.has(stick.b)) {
+        const isPelvisConstraint =
+          (stick.a === rightHipId && stick.b === leftHipId) ||
+          (stick.a === leftHipId && stick.b === rightHipId);
+        if (
+          torsoParticleIds.has(stick.a) &&
+          torsoParticleIds.has(stick.b) &&
+          !isPelvisConstraint
+        ) {
           this.torsoConstraintIndexes.add(index);
         }
       });
