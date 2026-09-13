@@ -1,22 +1,16 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
-import {
-  applySettingsToDocument,
-  completeInputStyleOnboarding,
-  defaultSettings,
-  loadSettings,
-  shouldShowInputStyleOnboarding,
-} from '../src/config/settings';
+import { applySettingsToDocument, defaultSettings, loadSettings } from '../src/config/settings';
 
 describe('editor settings', () => {
   beforeEach(() => localStorage.clear());
 
-  it('uses readable text and view rotation by default', () => {
+  it('uses readable text and editor defaults', () => {
     const settings = loadSettings();
     expect(settings.fontSize).toBe(16);
     expect(settings.language).toBe('zh-CN');
-    expect(settings.rotationMode).toBe('view');
+    expect('rotationMode' in settings).toBe(false);
+    expect('marqueeCompletionAction' in settings).toBe(false);
     expect(settings.voxelDisplayMode).toBe('floating');
-    expect(settings.marqueeCompletionAction).toBe('select');
     expect(settings.shortcuts.marqueeThrough).toBe('Ctrl+1');
     expect(settings.shortcuts.marqueeVisible).toBe('Ctrl+2');
   });
@@ -28,9 +22,7 @@ describe('editor settings', () => {
       theme: 'light',
       uiScale: 110,
       fontSize: 16,
-      rotationMode: 'view',
       voxelDisplayMode: 'floating',
-      marqueeCompletionAction: 'select',
     });
   });
 
@@ -39,11 +31,13 @@ describe('editor settings', () => {
     expect(document.documentElement.style.getPropertyValue('--font-size')).toBe('20px');
   });
 
-  it('shows the input-style choice once, including for existing installations', () => {
-    localStorage.setItem('rwr-editor-settings-v1', JSON.stringify({ theme: 'dark' }));
-    localStorage.setItem('rwr-editor-input-style-onboarding-v2', 'complete');
-    expect(shouldShowInputStyleOnboarding()).toBe(true);
-    completeInputStyleOnboarding();
-    expect(shouldShowInputStyleOnboarding()).toBe(false);
+  it('drops the obsolete rotation choice from older saved settings', () => {
+    localStorage.setItem(
+      'rwr-editor-settings-v1',
+      JSON.stringify({ theme: 'dark', rotationMode: 'scene', marqueeCompletionAction: 'select' }),
+    );
+    const settings = loadSettings();
+    expect('rotationMode' in settings).toBe(false);
+    expect('marqueeCompletionAction' in settings).toBe(false);
   });
 });

@@ -1,14 +1,13 @@
 import * as THREE from 'three';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   applyPreset,
   applySettingsToDocument,
-  completeInputStyleOnboarding,
   defaultSettings,
   loadSettings,
   saveSettings,
-  shouldShowInputStyleOnboarding,
 } from '../config/settings';
 import { VoxelAnimationRig } from '../core/animation/animation-rig';
 import { sampleAnimationPositions } from '../core/animation/sample-animation';
@@ -29,13 +28,8 @@ import { desktopBridge } from '../platform/desktop-api';
 import { CharacterPreviewController } from './character-preview';
 import { FileDialogGate } from './file-dialog-gate';
 import { isTextEntryTarget, releasePressedActions } from './focus-policy';
-import {
-  normalizeScreenRect,
-  rectangleOverlapRatio,
-  resolveMarqueeCompletionTool,
-  type NonMarqueeToolId,
-  type ScreenRect,
-} from './marquee-selection';
+import { normalizeScreenRect, rectangleOverlapRatio, type ScreenRect } from './marquee-selection';
+import { exceedsPointerDragThreshold } from './pointer-gesture';
 
 function element<T extends Element>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -74,7 +68,6 @@ const blueSliderValue = element<HTMLOutputElement>('#blueSliderValue');
 const redValue = element<HTMLOutputElement>('#redValue');
 const greenValue = element<HTMLOutputElement>('#greenValue');
 const blueValue = element<HTMLOutputElement>('#blueValue');
-const sculptMode = element<HTMLSelectElement>('#sculptMode');
 const activeToolLabel = element<HTMLElement>('#activeToolLabel');
 const marqueeSelection = element<HTMLDivElement>('#marqueeSelection');
 const deleteSelectionBtn = element<HTMLButtonElement>('#deleteSelectionBtn');
@@ -117,7 +110,6 @@ const particleZInput = element<HTMLInputElement>('#particleZInput');
 const resetParticleBtn = element<HTMLButtonElement>('#resetParticleBtn');
 const saveAnimationsBtn = element<HTMLButtonElement>('#saveAnimationsBtn');
 const settingsModal = element<HTMLDivElement>('#settingsModal');
-const inputStyleModal = element<HTMLDivElement>('#inputStyleModal');
 const unsavedModelModal = element<HTMLDivElement>('#unsavedModelModal');
 const overwriteModal = element<HTMLDivElement>('#overwriteModal');
 const deleteSelectionModal = element<HTMLDivElement>('#deleteSelectionModal');
@@ -137,7 +129,6 @@ let model: RwrModel | null = null;
 let currentFileName = 'edited_model.xml';
 let currentFilePath = '';
 let activeTool: ToolId = 'select';
-let previousNonMarqueeTool: NonMarqueeToolId = 'select';
 let selectedIds = new Set<string>();
 let undoStack: EditorSnapshot[] = [];
 let redoStack: EditorSnapshot[] = [];
@@ -185,6 +176,8 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.target.set(0, 24, 0);
 controls.screenSpacePanning = true;
+controls.enableRotate = false;
+controls.enablePan = false;
 
 const ambient = new THREE.HemisphereLight(0xb7c9ff, 0x252015, 1.65);
 scene.add(ambient);
@@ -237,16 +230,33 @@ const pointer = new THREE.Vector2();
 let pointerDown = { x: 0, y: 0 };
 let pointerDragged = false;
 let cameraLookActive = false;
+let cameraLookPointerId: number | null = null;
 let cameraLookLast = { x: 0, y: 0 };
 let shiftHeld = false;
 let marqueeMode: 'visible' | 'through' = 'through';
 let marqueePointerId: number | null = null;
 let marqueeStart = { x: 0, y: 0 };
 
+interface VoxelStrokeState {
+  pointerId: number;
+  before: EditorSnapshot;
+  visited: Set<string>;
+  sourceVoxelIds: Set<string>;
+  changedCount: number;
+  tool: 'paint' | 'sculpt';
+}
+
+let voxelStroke: VoxelStrokeState | null = null;
+
 function releaseCameraInput(): void {
   releasePressedActions(pressedCameraActions);
   shiftHeld = false;
+  if (cameraLookPointerId !== null && renderer.domElement.hasPointerCapture(cameraLookPointerId)) {
+    renderer.domElement.releasePointerCapture(cameraLookPointerId);
+  }
   cameraLookActive = false;
+  cameraLookPointerId = null;
+  if (voxelStroke) finishVoxelStroke(voxelStroke.pointerId);
 }
 
 const cameraLookDirection = new THREE.Vector3();
@@ -652,6 +662,40 @@ function loadModelText(text: string, name: string, path = ''): void {
   }
 }
 
+async function loadDroppedModelPath(path: string): Promise<void> {
+  try {
+    const result = await desktopBridge.openDroppedTextFile(path);
+    loadModelText(result.text, result.name, result.path);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '无法读取拖入的模型。';
+    setStatus(message, 'warning');
+    toast(message, 'warning');
+  }
+}
+
+async function bindDesktopFileDrop(): Promise<void> {
+  if (!desktopBridge.isAvailable()) return;
+  try {
+    await getCurrentWebview().onDragDropEvent((event) => {
+      const { payload } = event;
+      if (payload.type === 'enter' || payload.type === 'over') {
+        viewport.classList.add('dragging');
+        return;
+      }
+      viewport.classList.remove('dragging');
+      if (payload.type !== 'drop') return;
+      const path = payload.paths.find((candidate) => candidate.toLowerCase().endsWith('.xml'));
+      if (!path) {
+        toast('只能拖入 XML 模型文件。', 'warning');
+        return;
+      }
+      void loadDroppedModelPath(path);
+    });
+  } catch (error) {
+    console.warn('无法启用桌面文件拖放：', error);
+  }
+}
+
 function loadAnimationText(text: string, name: string): void {
   try {
     animations = parseAnimations(text);
@@ -899,9 +943,6 @@ function scheduleAutosave(): void {
 
 function setTool(tool: ToolId): void {
   if (tool !== 'marquee' && marqueePointerId !== null) releaseMarqueePointer(marqueePointerId);
-  if (tool === 'marquee' && activeTool !== 'marquee') {
-    previousNonMarqueeTool = activeTool as NonMarqueeToolId;
-  }
   activeTool = tool;
   document.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach((button) => {
     const active = button.dataset.tool === tool;
@@ -923,16 +964,21 @@ function updatePointer(event: PointerEvent): void {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 }
 
-function hitVoxel(event: PointerEvent): { voxel: Voxel; index: number; normal: THREE.Vector3 } | null {
+function hitVoxel(
+  event: PointerEvent,
+  allowedVoxelIds?: ReadonlySet<string>,
+): { voxel: Voxel; index: number; normal: THREE.Vector3 } | null {
   if (!voxelMesh) return null;
   updatePointer(event);
   raycaster.setFromCamera(pointer, camera);
-  const hit = raycaster.intersectObject(voxelMesh, false)[0];
-  if (!hit || hit.instanceId === undefined) return null;
-  const voxel = instanceVoxels[hit.instanceId];
-  if (!voxel) return null;
-  const normal = hit.face?.normal.clone().round() ?? new THREE.Vector3(0, 1, 0);
-  return { voxel, index: hit.instanceId, normal };
+  for (const hit of raycaster.intersectObject(voxelMesh, false)) {
+    if (hit.instanceId === undefined) continue;
+    const voxel = instanceVoxels[hit.instanceId];
+    if (!voxel || (allowedVoxelIds && !allowedVoxelIds.has(voxel.id))) continue;
+    const normal = hit.face?.normal.clone().round() ?? new THREE.Vector3(0, 1, 0);
+    return { voxel, index: hit.instanceId, normal };
+  }
+  return null;
 }
 
 interface MarqueeCandidate {
@@ -1071,8 +1117,6 @@ function finishMarquee(event: PointerEvent): boolean {
     updateStats();
     setStatus(`框选了 ${matches.length} 个体素`, 'success');
   }
-  const nextTool = resolveMarqueeCompletionTool(settings.marqueeCompletionAction, previousNonMarqueeTool);
-  if (nextTool) setTool(nextTool);
   event.preventDefault();
   event.stopImmediatePropagation();
   return true;
@@ -1184,7 +1228,7 @@ function handleVoxelAction(event: PointerEvent): void {
     }
     return;
   }
-  const { voxel, normal } = hit;
+  const { voxel } = hit;
   if (activeTool === 'select' || activeTool === 'move') {
     if (!event.ctrlKey) selectedIds.clear();
     if (event.ctrlKey && selectedIds.has(voxel.id)) selectedIds.delete(voxel.id);
@@ -1196,34 +1240,108 @@ function handleVoxelAction(event: PointerEvent): void {
   if (activeTool === 'picker') {
     setCurrentColor(voxel.r, voxel.g, voxel.b);
     toast('已吸取体素颜色', 'success');
+  }
+}
+
+function handleSculptDelete(event: PointerEvent): void {
+  if (!model || activeTool !== 'sculpt') return;
+  if (activeAnimation && animationVoxelToggle.checked && animationRig?.boundCount) {
+    toast('动画体素预览中不可编辑；关闭“体素跟随骨骼”后可继续编辑。', 'warning');
     return;
   }
-  if (activeTool === 'paint') {
+  const hit = hitVoxel(event);
+  if (!hit) return;
+  const { voxel } = hit;
+  commit(`已删除体素 (${voxel.x}, ${voxel.y}, ${voxel.z})`, () => {
+    model!.remove(new Set([voxel.id]));
+    selectedIds.delete(voxel.id);
+  });
+}
+
+function beginVoxelStroke(event: PointerEvent): boolean {
+  if (event.button !== 0 || (activeTool !== 'paint' && activeTool !== 'sculpt') || !model) return false;
+  if (activeAnimation && animationVoxelToggle.checked && animationRig?.boundCount) {
+    toast('动画体素预览中不可编辑；关闭“体素跟随骨骼”后可继续编辑。', 'warning');
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return true;
+  }
+  voxelStroke = {
+    pointerId: event.pointerId,
+    before: model.snapshot(),
+    visited: new Set(),
+    sourceVoxelIds: new Set(model.voxels.map((voxel) => voxel.id)),
+    changedCount: 0,
+    tool: activeTool,
+  };
+  controls.enabled = false;
+  renderer.domElement.setPointerCapture(event.pointerId);
+  applyVoxelStrokePoint(event);
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  return true;
+}
+
+function applyVoxelStrokePoint(event: PointerEvent): void {
+  if (!voxelStroke || !model) return;
+  const hit = hitVoxel(event, voxelStroke.tool === 'sculpt' ? voxelStroke.sourceVoxelIds : undefined);
+  if (!hit) return;
+  const { voxel, normal } = hit;
+
+  if (voxelStroke.tool === 'paint') {
     const ids = selectedIds.size && selectedIds.has(voxel.id) ? new Set(selectedIds) : new Set([voxel.id]);
-    commit(`已绘色 ${ids.size} 个体素`, () => {
-      model!.paint(ids, currentColor());
-    });
-    return;
+    const key = selectedIds.size && selectedIds.has(voxel.id) ? 'paint:selected' : `paint:${voxel.id}`;
+    if (voxelStroke.visited.has(key)) return;
+    voxelStroke.visited.add(key);
+    const count = model.paint(ids, currentColor());
+    if (!count) return;
+    voxelStroke.changedCount += count;
+  } else {
+    const position = {
+      x: voxel.x + Math.round(normal.x),
+      y: voxel.y + Math.round(normal.y),
+      z: voxel.z + Math.round(normal.z),
+    };
+    const key = `add:${position.x},${position.y},${position.z}`;
+    if (voxelStroke.visited.has(key)) return;
+    voxelStroke.visited.add(key);
+    if (!model.addVoxel(position, currentColor())) return;
+    voxelStroke.changedCount += 1;
   }
-  if (activeTool === 'sculpt') {
-    const primaryAdd = sculptMode.value === 'add';
-    const add = event.button === 0 ? primaryAdd : !primaryAdd;
-    if (add) {
-      const position = {
-        x: voxel.x + Math.round(normal.x),
-        y: voxel.y + Math.round(normal.y),
-        z: voxel.z + Math.round(normal.z),
-      };
-      commit(`已添加体素 (${position.x}, ${position.y}, ${position.z})`, () =>
-        Boolean(model!.addVoxel(position, currentColor())),
-      );
-    } else {
-      commit(`已删除体素 (${voxel.x}, ${voxel.y}, ${voxel.z})`, () => {
-        model!.remove(new Set([voxel.id]));
-        selectedIds.delete(voxel.id);
-      });
-    }
+
+  rebuildVoxelMesh();
+  updateStats();
+}
+
+function updateVoxelStroke(event: PointerEvent): boolean {
+  if (voxelStroke?.pointerId !== event.pointerId) return false;
+  if (!(event.buttons & 1)) {
+    finishVoxelStroke(event.pointerId);
+    return true;
   }
+  pointerDragged = true;
+  applyVoxelStrokePoint(event);
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  return true;
+}
+
+function finishVoxelStroke(pointerId: number): boolean {
+  if (voxelStroke?.pointerId !== pointerId) return false;
+  const stroke = voxelStroke;
+  voxelStroke = null;
+  controls.enabled = true;
+  if (renderer.domElement.hasPointerCapture(pointerId)) renderer.domElement.releasePointerCapture(pointerId);
+  if (stroke.changedCount) {
+    undoStack.push(stroke.before);
+    if (undoStack.length > 60) undoStack.shift();
+    redoStack = [];
+    scheduleAutosave();
+    const action = stroke.tool === 'paint' ? '绘色' : '添加';
+    setStatus(`已连续${action} ${stroke.changedCount} 个体素`, 'success');
+    updateStats();
+  }
+  return true;
 }
 
 function moveSelection(delta: Vec3): void {
@@ -1625,9 +1743,9 @@ function applySettings(): void {
   controls.rotateSpeed = settings.cameraSpeed;
   controls.zoomSpeed = settings.cameraSpeed;
   controls.panSpeed = settings.cameraSpeed;
-  controls.enableRotate = settings.rotationMode === 'scene';
-  viewModeBadge.textContent = settings.rotationMode === 'view' ? '视角旋转 · 透视' : '场景旋转 · 透视';
-  renderer.domElement.dataset.rotationMode = settings.rotationMode;
+  controls.enableRotate = false;
+  controls.enablePan = false;
+  viewModeBadge.textContent = '右键拖动视角 · 透视';
   updateShortcutLabels();
   updateBoneEditingState();
   rebuildVoxelMesh();
@@ -1647,9 +1765,7 @@ function populateSettingsForm(): void {
   element<HTMLInputElement>('#cameraSpeedSetting').value = String(settings.cameraSpeed);
   element<HTMLElement>('#cameraSpeedValue').textContent =
     `${settings.cameraSpeed.toFixed(2).replace(/0$/, '')}×`;
-  element<HTMLSelectElement>('#rotationModeSetting').value = settings.rotationMode;
   element<HTMLSelectElement>('#voxelDisplayModeSetting').value = settings.voxelDisplayMode;
-  element<HTMLSelectElement>('#marqueeCompletionActionSetting').value = settings.marqueeCompletionAction;
   element<HTMLInputElement>('#autosaveSetting').checked = settings.autosave;
   element<HTMLInputElement>('#confirmDeleteSetting').checked = settings.confirmDelete;
   element<HTMLInputElement>('#confirmOverwriteSetting').checked = settings.confirmOverwrite;
@@ -1724,24 +1840,11 @@ function bindSettings(): void {
     populateSettingsForm();
     applySettings();
   });
-  element<HTMLSelectElement>('#rotationModeSetting').addEventListener('change', (event) => {
-    settings.rotationMode = (event.target as HTMLSelectElement).value as EditorSettings['rotationMode'];
-    applySettings();
-    toast(
-      settings.rotationMode === 'view' ? '左键拖动将直接转动视角。' : '左键拖动将围绕场景旋转。',
-      'success',
-    );
-  });
   element<HTMLSelectElement>('#voxelDisplayModeSetting').addEventListener('change', (event) => {
     settings.voxelDisplayMode = (event.target as HTMLSelectElement)
       .value as EditorSettings['voxelDisplayMode'];
     applySettings();
     toast(settings.voxelDisplayMode === 'grid' ? '已启用紧密网格体素。' : '已启用悬浮体素。', 'success');
-  });
-  element<HTMLSelectElement>('#marqueeCompletionActionSetting').addEventListener('change', (event) => {
-    settings.marqueeCompletionAction = (event.target as HTMLSelectElement)
-      .value as EditorSettings['marqueeCompletionAction'];
-    applySettings();
   });
   element<HTMLInputElement>('#autosaveSetting').addEventListener('change', (event) => {
     settings.autosave = (event.target as HTMLInputElement).checked;
@@ -1811,31 +1914,6 @@ function bindSettings(): void {
     applySettings();
     toast('设置已恢复默认值', 'success');
   });
-}
-
-function bindInputStyleOnboarding(): void {
-  element('#onboardingEnglishBtn').addEventListener('click', () => {
-    settings.language = 'en';
-    populateSettingsForm();
-    applySettings();
-  });
-  document.querySelectorAll<HTMLButtonElement>('[data-input-style]').forEach((button) =>
-    button.addEventListener('click', () => {
-      settings.rotationMode = button.dataset.inputStyle === 'scene' ? 'scene' : 'view';
-      completeInputStyleOnboarding();
-      inputStyleModal.classList.add('hidden');
-      populateSettingsForm();
-      applySettings();
-      toast(
-        settings.rotationMode === 'view' ? '已采用键盘移动视角 + 鼠标操作。' : '已采用纯鼠标操作。',
-        'success',
-      );
-    }),
-  );
-  if (shouldShowInputStyleOnboarding()) {
-    inputStyleModal.classList.remove('hidden');
-    element<HTMLButtonElement>('[data-input-style="view"]').focus();
-  }
 }
 
 document
@@ -2162,10 +2240,14 @@ renderer.domElement.addEventListener(
     pointerDragged = false;
     if (beginMarquee(event)) return;
     if (beginBoneDrag(event)) return;
-    if (event.button === 0 && settings.rotationMode === 'view') {
-      cameraLookActive = true;
+    if (beginVoxelStroke(event)) return;
+    if (event.button === 2) {
+      cameraLookActive = false;
+      cameraLookPointerId = event.pointerId;
       cameraLookLast = { x: event.clientX, y: event.clientY };
       renderer.domElement.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      event.stopImmediatePropagation();
     }
   },
   { capture: true },
@@ -2175,10 +2257,17 @@ renderer.domElement.addEventListener(
   (event) => {
     if (updateMarquee(event)) return;
     if (updateBoneDrag(event)) return;
-    if (Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 5) pointerDragged = true;
-    if (cameraLookActive && event.buttons & 1) {
-      rotateCameraView(event.clientX - cameraLookLast.x, event.clientY - cameraLookLast.y);
-      cameraLookLast = { x: event.clientX, y: event.clientY };
+    if (updateVoxelStroke(event)) return;
+    if (exceedsPointerDragThreshold(pointerDown, { x: event.clientX, y: event.clientY }))
+      pointerDragged = true;
+    if (cameraLookPointerId === event.pointerId && event.buttons & 2) {
+      if (pointerDragged) cameraLookActive = true;
+      if (cameraLookActive) {
+        rotateCameraView(event.clientX - cameraLookLast.x, event.clientY - cameraLookLast.y);
+        cameraLookLast = { x: event.clientX, y: event.clientY };
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
     }
   },
   { capture: true },
@@ -2192,12 +2281,23 @@ renderer.domElement.addEventListener(
       event.stopImmediatePropagation();
       return;
     }
-    if (event.button === 0 && cameraLookActive) {
+    if (finishVoxelStroke(event.pointerId)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (event.button === 2 && cameraLookPointerId === event.pointerId) {
+      const shouldDeleteVoxel = !cameraLookActive && !pointerDragged;
       cameraLookActive = false;
+      cameraLookPointerId = null;
       if (renderer.domElement.hasPointerCapture(event.pointerId))
         renderer.domElement.releasePointerCapture(event.pointerId);
+      if (shouldDeleteVoxel) handleSculptDelete(event);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
     }
-    if ((event.button === 0 || event.button === 2) && !pointerDragged) handleVoxelAction(event);
+    if (event.button === 0 && !pointerDragged) handleVoxelAction(event);
   },
   { capture: true },
 );
@@ -2206,7 +2306,11 @@ renderer.domElement.addEventListener(
   (event) => {
     if (cancelMarquee(event.pointerId)) return;
     endBoneDrag(event.pointerId);
-    cameraLookActive = false;
+    if (finishVoxelStroke(event.pointerId)) return;
+    if (cameraLookPointerId === event.pointerId) {
+      cameraLookActive = false;
+      cameraLookPointerId = null;
+    }
   },
   { capture: true },
 );
@@ -2220,8 +2324,16 @@ viewport.addEventListener('drop', (event) => {
   event.preventDefault();
   viewport.classList.remove('dragging');
   const file = event.dataTransfer?.files[0];
-  if (!file || !file.name.toLowerCase().endsWith('.xml')) return;
-  void file.text().then((text) => loadModelText(text, file.name));
+  if (!file || !file.name.toLowerCase().endsWith('.xml')) {
+    toast('只能拖入 XML 模型文件。', 'warning');
+    return;
+  }
+  void file
+    .text()
+    .then((text) => loadModelText(text, file.name))
+    .catch((error: unknown) =>
+      toast(error instanceof Error ? error.message : '无法读取拖入的模型。', 'warning'),
+    );
 });
 
 function runShortcutAction(action: ShortcutAction): void {
@@ -2267,7 +2379,6 @@ window.addEventListener(
       else unsavedModelModal.classList.add('hidden');
     }
     if (
-      !inputStyleModal.classList.contains('hidden') ||
       !settingsModal.classList.contains('hidden') ||
       !overwriteModal.classList.contains('hidden') ||
       !deleteSelectionModal.classList.contains('hidden') ||
@@ -2301,7 +2412,7 @@ window.addEventListener(
 window.addEventListener('blur', releaseCameraInput);
 
 bindSettings();
-bindInputStyleOnboarding();
+void bindDesktopFileDrop();
 setCurrentColor(pickedColor.r, pickedColor.g, pickedColor.b);
 applySettings();
 updateStats();

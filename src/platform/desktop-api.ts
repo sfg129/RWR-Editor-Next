@@ -17,12 +17,14 @@ export interface SavedTextFile {
 export function createDesktopBridge(invokeCommand: InvokeCommand = invoke): {
   isAvailable(): boolean;
   openTextFile(kind: 'model' | 'animation'): Promise<OpenedTextFile | null>;
+  openDroppedTextFile(path: string): Promise<OpenedTextFile>;
   saveTextFile(defaultName: string, text: string): Promise<SavedTextFile | null>;
   overwriteTextFile(path: string, text: string): Promise<SavedTextFile>;
 } {
   return {
     isAvailable: () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window,
     openTextFile: (kind) => invokeCommand<OpenedTextFile | null>('open_text_file', { kind }),
+    openDroppedTextFile: (path) => invokeCommand<OpenedTextFile>('open_dropped_text_file', { path }),
     saveTextFile: (defaultName, text) =>
       invokeCommand<SavedTextFile | null>('save_text_file', { defaultName, text }),
     overwriteTextFile: (path, text) => invokeCommand<SavedTextFile>('overwrite_text_file', { path, text }),

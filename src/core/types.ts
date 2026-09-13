@@ -84,9 +84,7 @@ export interface EditorSettings {
   showSkeleton: boolean;
   lightingPreset: 'soft' | 'standard' | 'bright' | 'color';
   cameraSpeed: number;
-  rotationMode: 'view' | 'scene';
   voxelDisplayMode: 'floating' | 'grid';
-  marqueeCompletionAction: 'stay' | 'select' | 'previous';
   autosave: boolean;
   confirmDelete: boolean;
   confirmOverwrite: boolean;

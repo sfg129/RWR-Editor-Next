@@ -79,12 +79,9 @@
 .animation-workspace,
 .file-menu,
 .settings-dialog,
-.input-style-dialog,
 .decision-dialog,
 .choice-dialog,
 .character-preview-window,
-.input-style-options > button,
-.style-visual,
 .about-card,
 .editor-group,
 .check-control,
@@ -208,7 +205,6 @@ kbd {
   backdrop-filter: none;
 }
 .settings-dialog,
-.input-style-dialog,
 .decision-dialog,
 .choice-dialog,
 .character-preview-window {

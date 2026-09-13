@@ -30,6 +30,14 @@ scripts/                跨平台 Bun 构建与资源维护任务
 
 模型与动画解析器位于 `src/core`，不依赖 Vue 或 Tauri。桌面原生边界只接收文本和路径信息，因此核心编辑行为可在 Bun 测试环境中独立验证。原始 XML 中未被编辑的模型结构会尽量保持语义不变。
 
+## 正式发布资产
+
+正式版本在 [Releases](https://github.com/sfg129/RWR-Editor-Next/releases) 提供以下三平台产物：
+
+- Windows：NSIS 安装程序（`.exe`）与便携版（portable `.exe`）；
+- macOS：磁盘映像（`.dmg`）与便携版（`.app.zip`）；
+- Linux：Debian 包（`.deb`）与便携版（`.AppImage`）。
+
 ## 开发与构建
 
 需要 Bun 1.3+、通过 rustup 安装的系统 Rust stable，以及 [Tauri 2 对应平台依赖](https://v2.tauri.app/start/prerequisites/)。
@@ -44,6 +52,8 @@ bun run build
 ```
 
 `bun run build` 会安装锁定依赖、执行 JavaScript 回归测试与 Vue 类型检查、构建前端、调用系统 Rust 构建 Tauri，并将便携程序和平台安装包复制到 `release/`。最终用户无需安装 Bun、Rust 或编译工具。
+
+GitHub Actions 会在 Windows、macOS 与 Linux 上执行持续集成。正式发布工作流需要手动输入一个已经存在的 GitHub Release 标签，并从对应标签构建及上传上述平台资产。
 
 ## 许可
 

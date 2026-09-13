@@ -5,7 +5,6 @@ import CharacterPreview from './components/CharacterPreview.vue';
 import DecisionDialogs from './components/DecisionDialogs.vue';
 import EditorViewport from './components/EditorViewport.vue';
 import InspectorPanel from './components/InspectorPanel.vue';
-import OnboardingDialog from './components/OnboardingDialog.vue';
 import SettingsDialog from './components/SettingsDialog.vue';
 import ToolRail from './components/ToolRail.vue';
 </script>
@@ -24,7 +23,6 @@ import ToolRail from './components/ToolRail.vue';
       </InspectorPanel>
     </main>
 
-    <OnboardingDialog />
     <SettingsDialog />
     <DecisionDialogs />
     <CharacterPreview />

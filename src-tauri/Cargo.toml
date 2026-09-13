@@ -1,9 +1,11 @@
 [package]
 name = "rwr-editor"
-version = "0.6.0"
+version = "0.7.0"
 description = "Modern offline voxel and animation editor for Running With Rifles"
 authors = ["RWR Editor contributors"]
 edition = "2021"
+license = "GPL-3.0-only"
+repository = "https://github.com/sfg129/RWR-Editor-Next"
 
 [lib]
 name = "rwr_editor_lib"

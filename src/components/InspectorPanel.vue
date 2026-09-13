@@ -49,13 +49,7 @@ const tools = [
         </button>
       </div>
       <ColorControls />
-      <div class="control-row" data-tool-panel="sculpt">
-        <label>操作模式</label
-        ><select id="sculptMode">
-          <option value="add">左键添加 / 右键删除</option>
-          <option value="remove">左键删除 / 右键添加</option>
-        </select>
-      </div>
+      <p class="context-help" data-tool-panel="sculpt">左键拖动添加 · 右键单击删除 · 右键拖动视角</p>
     </section>
     <section class="panel selection-panel" data-tool-panel="select move marquee">
       <div class="panel-title">

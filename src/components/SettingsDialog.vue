@@ -106,21 +106,6 @@ const shortcuts = [
                 <option value="grid">网格模式</option>
               </select>
             </div>
-            <div class="setting">
-              <div><strong>完成框选操作后自动切换</strong><small>进行框选后是否自动切换工具</small></div>
-              <select id="marqueeCompletionActionSetting">
-                <option value="stay">不自动切换</option>
-                <option value="select">切换到选择工具（默认）</option>
-                <option value="previous">切换到上一个工具</option>
-              </select>
-            </div>
-            <div class="setting">
-              <div><strong>左键旋转模式</strong><small>视角-直接旋转摄像头；场景-围绕模型旋转</small></div>
-              <select id="rotationModeSetting">
-                <option value="view">视角（默认）</option>
-                <option value="scene">场景</option>
-              </select>
-            </div>
             <div class="setting range-setting">
               <div>
                 <strong>相机移动速度</strong
@@ -195,7 +180,7 @@ const shortcuts = [
               <div class="brand-mark large"><span /><span /><span /></div>
               <div>
                 <strong>RWR 体素编辑器 Next</strong>
-                <p>版本 0.6.0 · Vue 3 + Tauri 2</p>
+                <p>版本 0.7.0 · Vue 3 + Tauri 2</p>
               </div>
             </div>
             <p class="about-copy">

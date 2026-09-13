@@ -1,7 +1,6 @@
 import type { EditorSettings } from '../core/types';
 
 const STORAGE_KEY = 'rwr-editor-settings-v1';
-const INPUT_STYLE_ONBOARDING_KEY = 'rwr-editor-input-style-onboarding-v3';
 
 export const defaultSettings: EditorSettings = {
   language: 'zh-CN',
@@ -14,9 +13,7 @@ export const defaultSettings: EditorSettings = {
   showSkeleton: true,
   lightingPreset: 'bright',
   cameraSpeed: 1,
-  rotationMode: 'view',
   voxelDisplayMode: 'floating',
-  marqueeCompletionAction: 'select',
   autosave: true,
   confirmDelete: true,
   confirmOverwrite: true,
@@ -48,18 +45,21 @@ export const defaultSettings: EditorSettings = {
 
 export function loadSettings(): EditorSettings {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<EditorSettings>;
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<EditorSettings> & {
+      rotationMode?: unknown;
+      marqueeCompletionAction?: unknown;
+    };
+    const {
+      rotationMode: _obsoleteRotationMode,
+      marqueeCompletionAction: _obsoleteMarqueeCompletionAction,
+      ...compatibleStored
+    } = stored;
     return {
       ...defaultSettings,
-      ...stored,
+      ...compatibleStored,
       language: stored.language === 'en' ? 'en' : 'zh-CN',
       theme: stored.theme === 'light' ? 'light' : 'dark',
-      rotationMode: stored.rotationMode === 'scene' ? 'scene' : 'view',
       voxelDisplayMode: stored.voxelDisplayMode === 'grid' ? 'grid' : 'floating',
-      marqueeCompletionAction:
-        stored.marqueeCompletionAction === 'stay' || stored.marqueeCompletionAction === 'previous'
-          ? stored.marqueeCompletionAction
-          : 'select',
       fontSize: stored.fontSize === 18 || stored.fontSize === 20 ? stored.fontSize : 16,
       shortcuts: { ...defaultSettings.shortcuts, ...stored.shortcuts },
     };
@@ -70,14 +70,6 @@ export function loadSettings(): EditorSettings {
 
 export function saveSettings(settings: EditorSettings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-}
-
-export function shouldShowInputStyleOnboarding(): boolean {
-  return localStorage.getItem(INPUT_STYLE_ONBOARDING_KEY) !== 'complete';
-}
-
-export function completeInputStyleOnboarding(): void {
-  localStorage.setItem(INPUT_STYLE_ONBOARDING_KEY, 'complete');
 }
 
 export function applySettingsToDocument(settings: EditorSettings): void {

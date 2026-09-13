@@ -24,15 +24,3 @@ export function rectangleOverlapRatio(selection: ScreenRect, target: ScreenRect)
   const height = Math.max(0, Math.min(selection.bottom, target.bottom) - Math.max(selection.top, target.top));
   return (width * height) / targetArea;
 }
-
-export function resolveMarqueeCompletionTool(
-  action: EditorSettings['marqueeCompletionAction'],
-  previousTool: NonMarqueeToolId,
-): NonMarqueeToolId | null {
-  if (action === 'select') return 'select';
-  if (action === 'previous') return previousTool;
-  return null;
-}
-import type { EditorSettings, ToolId } from '../core/types';
-
-export type NonMarqueeToolId = Exclude<ToolId, 'marquee'>;
