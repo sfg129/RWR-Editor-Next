@@ -1,6 +1,6 @@
 {
   "name": "rwr-editor-next",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Modern offline voxel and animation editor for Running With Rifles",
   "private": true,
   "license": "GPL-3.0-only",

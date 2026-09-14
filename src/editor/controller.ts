@@ -18,6 +18,7 @@ import { setLanguage } from '../i18n/runtime';
 import type {
   EditorSettings,
   EditorSnapshot,
+  RotationAxis,
   RwrAnimation,
   ShortcutAction,
   ToolId,
@@ -30,6 +31,13 @@ import { FileDialogGate } from './file-dialog-gate';
 import { isTextEntryTarget, releasePressedActions } from './focus-policy';
 import { normalizeScreenRect, rectangleOverlapRatio, type ScreenRect } from './marquee-selection';
 import { exceedsPointerDragThreshold } from './pointer-gesture';
+import {
+  findNearestGroundPlacement,
+  loadVoxelBlocks,
+  persistVoxelBlock,
+  translatedBlockVoxels,
+  type StoredVoxelBlock,
+} from './voxel-block-library';
 
 function element<T extends Element>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -71,6 +79,14 @@ const blueValue = element<HTMLOutputElement>('#blueValue');
 const activeToolLabel = element<HTMLElement>('#activeToolLabel');
 const marqueeSelection = element<HTMLDivElement>('#marqueeSelection');
 const deleteSelectionBtn = element<HTMLButtonElement>('#deleteSelectionBtn');
+const rotateAxisButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-rotate-axis]'));
+const rotationAxisSelect = element<HTMLSelectElement>('#rotationAxisSelect');
+const rotationDegreesInput = element<HTMLInputElement>('#rotationDegreesInput');
+const rotateByDegreesBtn = element<HTMLButtonElement>('#rotateByDegreesBtn');
+const copyModelBlockBtn = element<HTMLButtonElement>('#copyModelBlockBtn');
+const pasteVoxelBlockBtn = element<HTMLButtonElement>('#pasteVoxelBlockBtn');
+const voxelBlockSelect = element<HTMLSelectElement>('#voxelBlockSelect');
+const voxelBlockSummary = element<HTMLElement>('#voxelBlockSummary');
 const rebindBtn = element<HTMLButtonElement>('#rebindBtn');
 const undoBtn = element<HTMLButtonElement>('#undoBtn');
 const redoBtn = element<HTMLButtonElement>('#redoBtn');
@@ -132,6 +148,7 @@ let activeTool: ToolId = 'select';
 let selectedIds = new Set<string>();
 let undoStack: EditorSnapshot[] = [];
 let redoStack: EditorSnapshot[] = [];
+let voxelBlocks: StoredVoxelBlock[] = [];
 let animations: RwrAnimation[] = [];
 let activeAnimation: RwrAnimation | null = null;
 let animationPlaying = false;
@@ -248,14 +265,23 @@ interface VoxelStrokeState {
 
 let voxelStroke: VoxelStrokeState | null = null;
 
+function releaseCameraLook(pointerId?: number): boolean {
+  if (cameraLookPointerId === null || (pointerId !== undefined && cameraLookPointerId !== pointerId)) {
+    return false;
+  }
+  const capturedPointerId = cameraLookPointerId;
+  cameraLookActive = false;
+  cameraLookPointerId = null;
+  if (renderer.domElement.hasPointerCapture(capturedPointerId)) {
+    renderer.domElement.releasePointerCapture(capturedPointerId);
+  }
+  return true;
+}
+
 function releaseCameraInput(): void {
   releasePressedActions(pressedCameraActions);
   shiftHeld = false;
-  if (cameraLookPointerId !== null && renderer.domElement.hasPointerCapture(cameraLookPointerId)) {
-    renderer.domElement.releasePointerCapture(cameraLookPointerId);
-  }
-  cameraLookActive = false;
-  cameraLookPointerId = null;
+  releaseCameraLook();
   if (voxelStroke) finishVoxelStroke(voxelStroke.pointerId);
 }
 
@@ -583,6 +609,44 @@ function updateSelectionHelper(): void {
   scene.add(selectionHelper);
 }
 
+function selectedVoxelBlock(): StoredVoxelBlock | null {
+  const id = Number.parseInt(voxelBlockSelect.value, 10);
+  return voxelBlocks.find((block) => block.id === id) ?? null;
+}
+
+function updateVoxelBlockSummary(): void {
+  const block = selectedVoxelBlock();
+  voxelBlockSummary.textContent = block
+    ? `编号 #${block.id} · ${block.voxels.length} 个体素 · 来源 ${block.sourceName}`
+    : '暂无已复制模型';
+  pasteVoxelBlockBtn.disabled = !model || !block;
+}
+
+function renderVoxelBlockLibrary(preferredId?: number): void {
+  voxelBlocks = loadVoxelBlocks();
+  voxelBlockSelect.replaceChildren();
+  if (!voxelBlocks.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = '暂无已复制模型';
+    option.disabled = true;
+    option.selected = true;
+    voxelBlockSelect.append(option);
+  } else {
+    for (const block of voxelBlocks) {
+      const option = document.createElement('option');
+      option.value = String(block.id);
+      option.textContent = `#${block.id} · ${block.sourceName} · ${block.voxels.length} 个体素`;
+      voxelBlockSelect.append(option);
+    }
+    const preferred = voxelBlocks.some((block) => block.id === preferredId)
+      ? preferredId
+      : voxelBlocks[0]!.id;
+    voxelBlockSelect.value = String(preferred);
+  }
+  updateVoxelBlockSummary();
+}
+
 function updateStats(): void {
   voxelCount.textContent = String(model?.voxels.length ?? 0);
   selectedCount.textContent = String(selectedIds.size);
@@ -605,7 +669,14 @@ function updateStats(): void {
     const zs = selected.map((v) => v.z);
     selectionPosition.textContent = `范围 ${Math.max(...xs) - Math.min(...xs) + 1} × ${Math.max(...ys) - Math.min(...ys) + 1} × ${Math.max(...zs) - Math.min(...zs) + 1}`;
   } else selectionPosition.textContent = '—';
-  deleteSelectionBtn.disabled = !selectedIds.size;
+  const hasSelection = selectedIds.size > 0;
+  deleteSelectionBtn.disabled = !hasSelection;
+  rotateAxisButtons.forEach((button) => (button.disabled = !hasSelection));
+  rotationAxisSelect.disabled = !hasSelection;
+  rotationDegreesInput.disabled = !hasSelection;
+  rotateByDegreesBtn.disabled = !hasSelection;
+  copyModelBlockBtn.disabled = !model?.voxels.length;
+  pasteVoxelBlockBtn.disabled = !model || !selectedVoxelBlock();
   saveAsBtn.disabled = !model;
   overwriteBtn.disabled = !model || !currentFilePath;
   rebindBtn.disabled = !model?.skeleton.length;
@@ -668,6 +739,18 @@ async function loadDroppedModelPath(path: string): Promise<void> {
     loadModelText(result.text, result.name, result.path);
   } catch (error) {
     const message = error instanceof Error ? error.message : '无法读取拖入的模型。';
+    setStatus(message, 'warning');
+    toast(message, 'warning');
+  }
+}
+
+async function loadStartupModel(): Promise<void> {
+  if (!desktopBridge.isAvailable()) return;
+  try {
+    const result = await desktopBridge.takeStartupTextFile();
+    if (result) loadModelText(result.text, result.name, result.path);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '无法读取启动时传入的模型。';
     setStatus(message, 'warning');
     toast(message, 'warning');
   }
@@ -888,12 +971,16 @@ function selectKeyframe(index: number): void {
   renderAnimationPose(frame.positions);
 }
 
-function commit(label: string, operation: () => boolean | void): void {
+function commit(
+  label: string,
+  operation: () => boolean | void,
+  failureMessage = '目标位置被其它体素占用。',
+): void {
   if (!model) return;
   const before = model.snapshot();
   const result = operation();
   if (result === false) {
-    toast('目标位置被其它体素占用。', 'warning');
+    toast(failureMessage, 'warning');
     return;
   }
   undoStack.push(before);
@@ -1347,6 +1434,91 @@ function finishVoxelStroke(pointerId: number): boolean {
 function moveSelection(delta: Vec3): void {
   if (!model || !selectedIds.size) return;
   commit(`已移动 ${selectedIds.size} 个体素`, () => model!.move(selectedIds, delta));
+}
+
+function rotateSelection(axis: RotationAxis, degrees: number): void {
+  if (!model || !selectedIds.size) return;
+  commit(
+    `已沿 ${axis.toUpperCase()} 轴旋转 ${selectedIds.size} 个体素 ${degrees}°`,
+    () => model!.rotate(selectedIds, axis, degrees),
+    '无法旋转：旋转后会与其它体素重叠。',
+  );
+}
+
+function rotateSelectionByInput(): void {
+  const degrees = Number(rotationDegreesInput.value);
+  if (!Number.isFinite(degrees)) {
+    toast('请输入有效的旋转角度。', 'warning');
+    rotationDegreesInput.focus();
+    return;
+  }
+  if (Math.abs(degrees % 360) < 1e-9) {
+    toast('旋转角度不能是 0° 或 360° 的整数倍。', 'warning');
+    rotationDegreesInput.focus();
+    return;
+  }
+  rotateSelection(rotationAxisSelect.value as RotationAxis, degrees);
+}
+
+function copyCurrentModelBlock(): void {
+  if (!model?.voxels.length) {
+    toast('当前模型没有可复制的体素。', 'warning');
+    return;
+  }
+  try {
+    const block = persistVoxelBlock(model.voxels, currentFileName);
+    renderVoxelBlockLibrary(block.id);
+    toast(`当前模型已保存到复制库，编号 #${block.id}。`, 'success');
+    setStatus(`已复制模型 #${block.id} · ${block.voxels.length} 个体素`, 'success');
+  } catch (error) {
+    toast(error instanceof Error ? error.message : '无法保存复制模型。', 'warning');
+  }
+}
+
+function voxelCoordinateKey(voxel: Pick<Vec3, 'x' | 'y' | 'z'>): string {
+  const fixed = (value: number) => (Math.round(value * 1_000_000) / 1_000_000).toFixed(6);
+  return `${fixed(voxel.x)},${fixed(voxel.y)},${fixed(voxel.z)}`;
+}
+
+function pasteSelectedModelBlock(): void {
+  if (!model) {
+    toast('请先载入或创建目标模型。', 'warning');
+    return;
+  }
+  const block = selectedVoxelBlock();
+  if (!block) {
+    toast('复制库中没有可粘贴的模型。', 'warning');
+    return;
+  }
+  const translation = findNearestGroundPlacement(block, model.voxels, model.bounds.center);
+  const pastedVoxels = translatedBlockVoxels(block, translation);
+  const occupied = new Set(model.voxels.map(voxelCoordinateKey));
+  const targets = new Set(pastedVoxels.map(voxelCoordinateKey));
+  if (
+    targets.size !== pastedVoxels.length ||
+    pastedVoxels.some((voxel) => occupied.has(voxelCoordinateKey(voxel)))
+  ) {
+    toast('无法粘贴：没有找到不与现有体素重叠的位置。', 'warning');
+    return;
+  }
+
+  const pastedIds: string[] = [];
+  commit(
+    `已粘贴模型 #${block.id} · ${pastedVoxels.length} 个体素`,
+    () => {
+      for (const voxel of pastedVoxels) {
+        const created = model!.addVoxel(voxel, voxel);
+        if (!created) return false;
+        pastedIds.push(created.id);
+      }
+      selectedIds = new Set(pastedIds);
+    },
+    '无法粘贴：目标位置与现有体素重叠。',
+  );
+  if (pastedIds.length === pastedVoxels.length) {
+    setTool('select');
+    toast(`已粘贴模型 #${block.id}，并选中新增体素。`, 'success');
+  }
 }
 
 async function openFile(kind: 'model' | 'animation'): Promise<void> {
@@ -2056,6 +2228,16 @@ document.querySelectorAll<HTMLButtonElement>('[data-move]').forEach((button) =>
     moveSelection({ x, y, z });
   }),
 );
+rotateAxisButtons.forEach((button) =>
+  button.addEventListener('click', () => rotateSelection(button.dataset.rotateAxis as RotationAxis, 90)),
+);
+rotateByDegreesBtn.addEventListener('click', rotateSelectionByInput);
+rotationDegreesInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') rotateSelectionByInput();
+});
+copyModelBlockBtn.addEventListener('click', copyCurrentModelBlock);
+pasteVoxelBlockBtn.addEventListener('click', pasteSelectedModelBlock);
+voxelBlockSelect.addEventListener('change', updateVoxelBlockSummary);
 function performDeleteSelection(): void {
   if (!model || !selectedIds.size) return;
   const ids = new Set(selectedIds);
@@ -2219,7 +2401,7 @@ resetParticleBtn.addEventListener('click', () => {
 });
 saveAnimationsBtn.addEventListener('click', () => void saveAnimationFile());
 
-renderer.domElement.addEventListener('contextmenu', (event) => event.preventDefault());
+document.addEventListener('contextmenu', (event) => event.preventDefault(), { capture: true });
 function rotateCameraView(deltaX: number, deltaY: number): void {
   const distance = Math.max(0.1, camera.position.distanceTo(controls.target));
   camera.getWorldDirection(cameraLookDirection);
@@ -2288,10 +2470,7 @@ renderer.domElement.addEventListener(
     }
     if (event.button === 2 && cameraLookPointerId === event.pointerId) {
       const shouldDeleteVoxel = !cameraLookActive && !pointerDragged;
-      cameraLookActive = false;
-      cameraLookPointerId = null;
-      if (renderer.domElement.hasPointerCapture(event.pointerId))
-        renderer.domElement.releasePointerCapture(event.pointerId);
+      releaseCameraLook(event.pointerId);
       if (shouldDeleteVoxel) handleSculptDelete(event);
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -2307,13 +2486,19 @@ renderer.domElement.addEventListener(
     if (cancelMarquee(event.pointerId)) return;
     endBoneDrag(event.pointerId);
     if (finishVoxelStroke(event.pointerId)) return;
-    if (cameraLookPointerId === event.pointerId) {
-      cameraLookActive = false;
-      cameraLookPointerId = null;
-    }
+    releaseCameraLook(event.pointerId);
   },
   { capture: true },
 );
+renderer.domElement.addEventListener('lostpointercapture', (event) => {
+  if (cameraLookPointerId !== event.pointerId) return;
+  cameraLookActive = false;
+  cameraLookPointerId = null;
+});
+
+window.addEventListener('pointerup', (event) => {
+  if (event.button === 2) releaseCameraLook(event.pointerId);
+});
 
 viewport.addEventListener('dragover', (event) => {
   event.preventDefault();
@@ -2410,14 +2595,19 @@ window.addEventListener(
   { capture: true },
 );
 window.addEventListener('blur', releaseCameraInput);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) releaseCameraInput();
+});
 
 bindSettings();
 void bindDesktopFileDrop();
+renderVoxelBlockLibrary();
 setCurrentColor(pickedColor.r, pickedColor.g, pickedColor.b);
 applySettings();
 updateStats();
 updateAnimationEditor();
 setTool('select');
+void loadStartupModel();
 
 let previousFrame = performance.now();
 let fpsFrameCount = 0;

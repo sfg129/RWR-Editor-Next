@@ -18,6 +18,7 @@ export function createDesktopBridge(invokeCommand: InvokeCommand = invoke): {
   isAvailable(): boolean;
   openTextFile(kind: 'model' | 'animation'): Promise<OpenedTextFile | null>;
   openDroppedTextFile(path: string): Promise<OpenedTextFile>;
+  takeStartupTextFile(): Promise<OpenedTextFile | null>;
   saveTextFile(defaultName: string, text: string): Promise<SavedTextFile | null>;
   overwriteTextFile(path: string, text: string): Promise<SavedTextFile>;
 } {
@@ -25,6 +26,7 @@ export function createDesktopBridge(invokeCommand: InvokeCommand = invoke): {
     isAvailable: () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window,
     openTextFile: (kind) => invokeCommand<OpenedTextFile | null>('open_text_file', { kind }),
     openDroppedTextFile: (path) => invokeCommand<OpenedTextFile>('open_dropped_text_file', { path }),
+    takeStartupTextFile: () => invokeCommand<OpenedTextFile | null>('take_startup_text_file'),
     saveTextFile: (defaultName, text) =>
       invokeCommand<SavedTextFile | null>('save_text_file', { defaultName, text }),
     overwriteTextFile: (path, text) => invokeCommand<SavedTextFile>('overwrite_text_file', { path, text }),

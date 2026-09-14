@@ -1,6 +1,7 @@
 import type {
   BindingGroup,
   EditorSnapshot,
+  RotationAxis,
   RwrAnimation,
   SkeletonParticle,
   SkeletonStick,
@@ -28,6 +29,14 @@ function intAttr(element: Element, name: string, fallback = 0): number {
 
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function normalizedCoordinate(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+function coordinateKey(position: Vec3): string {
+  return `${normalizedCoordinate(position.x)},${normalizedCoordinate(position.y)},${normalizedCoordinate(position.z)}`;
 }
 
 function cloneVoxel(voxel: Voxel): Voxel {
@@ -210,6 +219,54 @@ export class RwrModel {
       voxel.y += delta.y;
       voxel.z += delta.z;
     }
+    this.dirty = true;
+    return true;
+  }
+
+  rotate(ids: Set<string>, axis: RotationAxis, degrees = 90): boolean {
+    const selected = this.voxels.filter((voxel) => ids.has(voxel.id));
+    if (!selected.length) return false;
+    const xs = selected.map((voxel) => voxel.x);
+    const ys = selected.map((voxel) => voxel.y);
+    const zs = selected.map((voxel) => voxel.z);
+    const center = {
+      x: (Math.min(...xs) + Math.max(...xs)) / 2,
+      y: (Math.min(...ys) + Math.max(...ys)) / 2,
+      z: (Math.min(...zs) + Math.max(...zs)) / 2,
+    };
+    const radians = (degrees * Math.PI) / 180;
+    const cosine = Math.cos(radians);
+    const sine = Math.sin(radians);
+    const positions = selected.map((voxel) => {
+      const x = voxel.x - center.x;
+      const y = voxel.y - center.y;
+      const z = voxel.z - center.z;
+      if (axis === 'x') {
+        return {
+          x: voxel.x,
+          y: normalizedCoordinate(center.y + y * cosine - z * sine),
+          z: normalizedCoordinate(center.z + y * sine + z * cosine),
+        };
+      }
+      if (axis === 'y') {
+        return {
+          x: normalizedCoordinate(center.x + x * cosine + z * sine),
+          y: voxel.y,
+          z: normalizedCoordinate(center.z - x * sine + z * cosine),
+        };
+      }
+      return {
+        x: normalizedCoordinate(center.x + x * cosine - y * sine),
+        y: normalizedCoordinate(center.y + x * sine + y * cosine),
+        z: voxel.z,
+      };
+    });
+    const occupied = new Set(this.voxels.filter((voxel) => !ids.has(voxel.id)).map(coordinateKey));
+    const positionKeys = positions.map(coordinateKey);
+    if (new Set(positionKeys).size !== positionKeys.length || positionKeys.some((key) => occupied.has(key))) {
+      return false;
+    }
+    selected.forEach((voxel, index) => Object.assign(voxel, positions[index]));
     this.dirty = true;
     return true;
   }

@@ -180,7 +180,7 @@ const shortcuts = [
               <div class="brand-mark large"><span /><span /><span /></div>
               <div>
                 <strong>RWR 体素编辑器 Next</strong>
-                <p>版本 0.7.0 · Vue 3 + Tauri 2</p>
+                <p>版本 0.7.1 · Vue 3 + Tauri 2</p>
               </div>
             </div>
             <p class="about-copy">

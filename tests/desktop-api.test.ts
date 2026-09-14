@@ -12,12 +12,14 @@ describe('Tauri desktop bridge', () => {
 
     await bridge.openTextFile('animation');
     await bridge.openDroppedTextFile('C:/models/dropped.xml');
+    await bridge.takeStartupTextFile();
     await bridge.saveTextFile('walk.xml', '<animations/>');
     await bridge.overwriteTextFile('C:/models/soldier.xml', '<model/>');
 
     expect(calls).toEqual([
       { command: 'open_text_file', args: { kind: 'animation' } },
       { command: 'open_dropped_text_file', args: { path: 'C:/models/dropped.xml' } },
+      { command: 'take_startup_text_file', args: undefined },
       { command: 'save_text_file', args: { defaultName: 'walk.xml', text: '<animations/>' } },
       { command: 'overwrite_text_file', args: { path: 'C:/models/soldier.xml', text: '<model/>' } },
     ]);

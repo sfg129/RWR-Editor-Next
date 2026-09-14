@@ -1,6 +1,6 @@
 [package]
 name = "rwr-editor"
-version = "0.7.0"
+version = "0.7.1"
 description = "Modern offline voxel and animation editor for Running With Rifles"
 authors = ["RWR Editor contributors"]
 edition = "2021"

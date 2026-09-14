@@ -64,6 +64,39 @@ describe('RWR model compatibility', () => {
     expect(reparsed.bindings[0]?.voxelIds.size).toBe(2);
   });
 
+  it('rotates selected voxels 90 degrees around their bounding-box center', () => {
+    const model = RwrModel.createNew(1);
+    const first = model.voxels[0]!;
+    const second = model.addVoxel({ x: 2, y: 0, z: 0 }, { r: 1, g: 1, b: 1 })!;
+
+    expect(model.rotate(new Set([first.id, second.id]), 'z')).toBe(true);
+    expect(model.voxels.map(({ x, y, z }) => ({ x, y, z }))).toEqual([
+      { x: 1, y: -1, z: 0 },
+      { x: 1, y: 1, z: 0 },
+    ]);
+  });
+
+  it('rejects a selected rotation when its destination overlaps another voxel', () => {
+    const model = RwrModel.createNew(1);
+    const first = model.voxels[0]!;
+    const second = model.addVoxel({ x: 2, y: 0, z: 0 }, { r: 1, g: 1, b: 1 })!;
+    model.addVoxel({ x: 1, y: 1, z: 0 }, { r: 0, g: 0, b: 0 });
+
+    expect(model.rotate(new Set([first.id, second.id]), 'z')).toBe(false);
+    expect(first).toMatchObject({ x: 0, y: 0, z: 0 });
+    expect(second).toMatchObject({ x: 2, y: 0, z: 0 });
+  });
+
+  it('supports an independent arbitrary-angle rotation', () => {
+    const model = RwrModel.createNew(1);
+    const first = model.voxels[0]!;
+    const second = model.addVoxel({ x: 2, y: 0, z: 0 }, { r: 1, g: 1, b: 1 })!;
+
+    expect(model.rotate(new Set([first.id, second.id]), 'z', 45)).toBe(true);
+    expect(first).toMatchObject({ x: 0.292893, y: -0.707107, z: 0 });
+    expect(second).toMatchObject({ x: 1.707107, y: 0.707107, z: 0 });
+  });
+
   it('removes deleted voxels from skeleton binding references', () => {
     const model = RwrModel.parse(MODEL);
     model.remove(new Set([model.voxels[0]!.id]));

@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::{
     collections::HashSet,
+    ffi::OsString,
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -9,11 +10,20 @@ use tauri::{AppHandle, State};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 
 const APP_NAME: &str = "RWR 体素编辑器 Next";
-const APP_VERSION: &str = "0.7.0";
+const APP_VERSION: &str = "0.7.1";
 
-#[derive(Default)]
 struct EditorFileState {
     writable_xml_paths: Mutex<HashSet<PathBuf>>,
+    startup_xml_path: Mutex<Option<PathBuf>>,
+}
+
+impl EditorFileState {
+    fn from_process_args() -> Self {
+        Self {
+            writable_xml_paths: Mutex::new(HashSet::new()),
+            startup_xml_path: Mutex::new(first_xml_path(std::env::args_os().skip(1))),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -46,6 +56,17 @@ fn ensure_xml_extension(mut path: PathBuf) -> PathBuf {
 
 fn display_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
+}
+
+fn first_xml_path(args: impl IntoIterator<Item = OsString>) -> Option<PathBuf> {
+    args.into_iter().map(PathBuf::from).find(|path| {
+        path.is_file()
+            && path
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(|value| value.eq_ignore_ascii_case("xml"))
+                == Some(true)
+    })
 }
 
 fn remember_writable_path(
@@ -153,6 +174,19 @@ fn open_dropped_text_file(
 }
 
 #[tauri::command]
+fn take_startup_text_file(
+    state: State<'_, EditorFileState>,
+) -> Result<Option<OpenedTextFile>, String> {
+    let path = state
+        .startup_xml_path
+        .lock()
+        .map_err(|_| "启动文件状态不可用。".to_string())?
+        .take();
+    path.map(|value| read_xml_file(&state, value, "model".to_string()))
+        .transpose()
+}
+
+#[tauri::command]
 async fn save_text_file(
     app: AppHandle,
     state: State<'_, EditorFileState>,
@@ -228,14 +262,42 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .manage(EditorFileState::default())
+        .manage(EditorFileState::from_process_args())
         .invoke_handler(tauri::generate_handler![
             open_text_file,
             open_dropped_text_file,
+            take_startup_text_file,
             save_text_file,
             overwrite_text_file,
             app_info
         ])
         .run(tauri::generate_context!())
         .expect("failed to run RWR Editor");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_the_first_existing_xml_startup_argument() {
+        let fixture_dir = std::env::temp_dir().join(format!(
+            "rwr-editor-startup-argument-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&fixture_dir).expect("create startup argument fixture directory");
+        let text_path = fixture_dir.join("ignored.txt");
+        let xml_path = fixture_dir.join("拖入模型.XML");
+        fs::write(&text_path, "ignored").expect("write non-XML fixture");
+        fs::write(&xml_path, "<model />").expect("write XML fixture");
+
+        let selected = first_xml_path([
+            OsString::from("--ignored-option"),
+            text_path.into_os_string(),
+            xml_path.clone().into_os_string(),
+        ]);
+
+        assert_eq!(selected, Some(xml_path));
+        fs::remove_dir_all(fixture_dir).expect("remove startup argument fixtures");
+    }
 }

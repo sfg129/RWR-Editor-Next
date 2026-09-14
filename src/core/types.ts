@@ -28,6 +28,8 @@ export interface Vec3 {
   z: number;
 }
 
+export type RotationAxis = 'x' | 'y' | 'z';
+
 export interface Voxel extends Vec3 {
   id: string;
   r: number;
