@@ -1,6 +1,6 @@
 # RWR Editor Next
 
-RWR Editor Next 是纯机生，零人工的面向 _Running With Rifles_ 资源工作流的跨平台离线体素、骨骼与动画编辑器。它保留原版 RWR Editor 的 XML 行为与编辑能力，同时提供现代界面、非阻塞文件操作和可独立分发的原生桌面程序。
+RWR Editor Next 是面向 _Running With Rifles_ 资源工作流的跨平台离线体素、骨骼与动画编辑器。它保留原版 RWR Editor 的 XML 行为与编辑能力，同时提供现代界面、非阻塞文件操作和可独立分发的原生桌面程序。
 
 RWR Editor Next is a cross-platform, offline voxel, skeleton, and animation editor for _Running With Rifles_ asset workflows. Simplified Chinese is the default interface language, with complete English UI localization available in Settings.
 
