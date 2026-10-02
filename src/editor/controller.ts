@@ -862,7 +862,7 @@ function updateAnimationWorkspaceStatus(): void {
     : '未载入动画';
   animationInfo.textContent = animations.length
     ? `${currentAnimationFileName} · 共 ${animations.length} 个动画${animationDirty ? ' · 有未导出修改' : ''}`
-    : '载入动画 XML 后可同步预览骨骼与体素。';
+    : '';
   saveAnimationsBtn.disabled = !animations.length;
 }
 
@@ -1641,7 +1641,7 @@ function createNewModel(base: 1 | 8): void {
   updateAnimationEditor();
   setTool('sculpt');
   setStatus(`已创建含 ${base} 个基点体素的新模型`, 'success');
-  toast('新模型已创建；保存时请选择目录和文件名。', 'success');
+  toast('新模型已创建。', 'success');
 }
 
 function switchAnimationPage(page: 'preview' | 'edit'): void {
@@ -1684,7 +1684,7 @@ function createAnimation(): void {
   renderAnimationPose(animation.frames[0]!.positions);
   animationWorkspace.open = true;
   switchAnimationPage('edit');
-  toast('已创建包含初始关键帧的新动画。', 'success');
+  toast('动画已创建。', 'success');
 }
 
 function duplicateAnimation(): void {

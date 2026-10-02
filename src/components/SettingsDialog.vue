@@ -61,7 +61,7 @@ const shortcuts = [
           <section class="settings-page active" data-page="performance">
             <h3>性能</h3>
             <div class="setting">
-              <div><strong>性能预设</strong><small>调整抗锯齿、阴影和渲染倍率</small></div>
+              <div><strong>性能预设</strong><small>抗锯齿、阴影与渲染倍率</small></div>
               <select id="performancePreset">
                 <option value="quality">高质量</option>
                 <option value="balanced">均衡</option>
@@ -82,7 +82,7 @@ const shortcuts = [
               <input id="pixelRatioSetting" type="range" min="1" max="2" step="0.25" />
             </div>
             <div class="setting">
-              <div><strong>抗锯齿</strong><small>让体素边缘更平滑</small></div>
+              <div><strong>抗锯齿</strong></div>
               <label class="switch"><input id="antialiasSetting" type="checkbox" /><span /></label>
             </div>
             <div class="setting">
@@ -90,17 +90,14 @@ const shortcuts = [
               <label class="switch"><input id="shadowsSetting" type="checkbox" /><span /></label>
             </div>
             <div class="setting">
-              <div><strong>显示网格</strong><small>显示地面坐标参考</small></div>
+              <div><strong>显示网格</strong></div>
               <label class="switch"><input id="gridSetting" type="checkbox" /><span /></label>
             </div>
           </section>
           <section class="settings-page" data-page="behavior">
             <h3>功能</h3>
             <div class="setting">
-              <div>
-                <strong>体素显示模式</strong
-                ><small>悬浮模式接近实际渲染外观，网格模式紧密贴合并绘制体素边线</small>
-              </div>
+              <div><strong>体素显示模式</strong><small>悬浮：留有间隙；网格：紧密排列并显示边线</small></div>
               <select id="voxelDisplayModeSetting">
                 <option value="floating">悬浮模式（默认）</option>
                 <option value="grid">网格模式</option>
@@ -114,29 +111,29 @@ const shortcuts = [
               <input id="cameraSpeedSetting" type="range" min="0.25" max="2.5" step="0.25" />
             </div>
             <div class="setting">
-              <div><strong>自动恢复</strong><small>在本机保存最近编辑快照</small></div>
+              <div><strong>自动恢复</strong><small>保留最近编辑快照</small></div>
               <label class="switch"><input id="autosaveSetting" type="checkbox" /><span /></label>
             </div>
             <div class="setting">
-              <div><strong>删除时确认</strong><small>删除多个体素时要求二次确认</small></div>
+              <div><strong>删除时确认</strong><small>仅删除多个体素时询问</small></div>
               <label class="switch"><input id="confirmDeleteSetting" type="checkbox" /><span /></label>
             </div>
             <div class="setting">
-              <div><strong>覆盖保存前确认</strong><small>覆盖当前模型前要求确认</small></div>
+              <div><strong>覆盖保存前确认</strong></div>
               <label class="switch"><input id="confirmOverwriteSetting" type="checkbox" /><span /></label>
             </div>
           </section>
           <section class="settings-page" data-page="appearance">
             <h3>外观</h3>
             <div class="setting">
-              <div><strong>主题</strong><small>切换深色或浅色界面</small></div>
+              <div><strong>主题</strong></div>
               <select id="themeSetting">
                 <option value="dark">深色</option>
                 <option value="light">浅色</option>
               </select>
             </div>
             <div class="setting">
-              <div><strong>字体大小</strong><small>调整文字尺寸</small></div>
+              <div><strong>字体大小</strong></div>
               <select id="fontSizeSetting">
                 <option value="16">标准（16 px）</option>
                 <option value="18">大（18 px）</option>
@@ -144,7 +141,7 @@ const shortcuts = [
               </select>
             </div>
             <div class="setting">
-              <div><strong>主题颜色</strong><small>用于按钮、选择框和状态提示</small></div>
+              <div><strong>主题颜色</strong></div>
               <input id="accentSetting" type="color" />
             </div>
             <div class="setting range-setting">
@@ -180,14 +177,10 @@ const shortcuts = [
               <div class="brand-mark large"><span /><span /><span /></div>
               <div>
                 <strong>RWR 体素编辑器 Next</strong>
-                <p>版本 0.7.1 · Vue 3 + Tauri 2</p>
+                <p>版本 0.7.2</p>
               </div>
             </div>
-            <p class="about-copy">
-              面向 Running With Rifles
-              资源工作流的离线体素、骨骼与动画编辑器。解析、编辑和保存均在本机完成，并以原版 XML
-              行为为兼容基准。
-            </p>
+            <p class="about-copy">Running With Rifles 体素与动画编辑器。</p>
             <a
               class="button about-repository-link"
               :href="repositoryUrl"

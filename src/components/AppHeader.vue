@@ -11,15 +11,15 @@
         </button>
         <div id="fileMenu" class="file-menu hidden" role="menu">
           <button id="newModelBtn" role="menuitem">
-            <span><strong>新建空模型</strong><small>创建 1 个中心体素</small></span
+            <span><strong>新建空模型</strong></span
             ><kbd data-shortcut-label="newModel">Ctrl N</kbd>
           </button>
           <button id="overwriteBtn" role="menuitem" disabled>
-            <span><strong>保存</strong><small>覆盖当前模型文件</small></span
+            <span><strong>保存</strong></span
             ><kbd data-shortcut-label="overwrite">Ctrl Alt S</kbd>
           </button>
           <button id="saveAsBtn" role="menuitem" disabled>
-            <span><strong>另存为</strong><small>选择目录和文件名</small></span
+            <span><strong>另存为</strong></span
             ><kbd data-shortcut-label="saveAs">Ctrl S</kbd>
           </button>
         </div>

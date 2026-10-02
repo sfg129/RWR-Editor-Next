@@ -13,7 +13,7 @@
           <h2 id="unsavedModelTitle">新建模型前如何处理当前文件？</h2>
         </div>
       </header>
-      <p>当前模型包含未保存修改。取消不会改变任何内容。</p>
+      <p>当前模型有未保存修改。</p>
       <div class="decision-actions">
         <button id="saveBeforeNewBtn" class="button primary">保存</button
         ><button id="saveAsBeforeNewBtn" class="button">另存为</button

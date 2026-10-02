@@ -5,12 +5,11 @@
         <div class="empty-cube"><i /><i /><i /></div>
         <span class="empty-kicker">NO MODEL / 000</span>
         <h1>开始编辑 RWR 模型</h1>
-        <p>打开角色 XML，或创建包含一个中心体素的新模型。所有解析与保存均在本机完成。</p>
         <div class="empty-actions">
           <button id="emptyOpenBtn" class="button primary large">选择模型文件</button
           ><button id="emptyNewBtn" class="button large">新建空文件</button>
         </div>
-        <div class="drop-hint">也可以将 XML 拖放到工作区</div>
+        <div class="drop-hint">拖放 XML 文件以打开</div>
       </div>
       <div class="viewport-badges">
         <span id="viewModeBadge">透视视图</span><span id="fpsBadge">-- FPS</span>

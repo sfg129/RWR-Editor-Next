@@ -27,7 +27,6 @@
           tabindex="0"
           aria-label="人物模型预览场景"
         >
-          <div id="characterPreviewWorldBadge" class="preview-world-badge">GRASS TEST WORLD / RUNNING</div>
           <div id="characterPreviewCameraHint" class="preview-camera-hint">
             WASD 移动 · Shift 加速 · 左键转动视角 · 滚轮缩放
           </div>
@@ -73,7 +72,6 @@
             <label class="check-control compact"
               ><input id="characterPreviewFixedCamera" type="checkbox" checked /><span>固定镜头</span></label
             >
-            <p>固定后禁用镜头移动；左键拖动可旋转人物模型。</p>
           </section>
 
           <p id="characterPreviewStatus" class="preview-status" aria-live="polite" />

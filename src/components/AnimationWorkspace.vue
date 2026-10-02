@@ -18,7 +18,6 @@
           <div><strong id="unboundCount">0</strong><span>未绑定体素</span></div>
         </div>
         <button id="rebindBtn" class="button full" disabled>重新绑定到最近骨骼</button>
-        <p class="warning-note">保存时自动维护体素索引；重新绑定前可撤销。</p>
       </section>
       <section class="workspace-module animation-editor-section">
         <div class="workspace-module-heading">
@@ -26,7 +25,6 @@
             <span class="module-code">ANIM</span>
             <h3>动画预览与编辑</h3>
           </div>
-          <span class="module-description">关键帧与骨骼姿势</span>
         </div>
         <div class="animation-tabs">
           <button class="active" data-animation-page="preview">预览</button
@@ -54,7 +52,7 @@
                 disabled /><span
             /></label>
           </div>
-          <p id="animationInfo" class="animation-note">载入动画 XML 后可同步预览骨骼与体素。</p>
+          <p id="animationInfo" class="animation-note" />
         </section>
         <section class="animation-page" data-animation-panel="edit">
           <div class="animation-actions">
@@ -103,7 +101,6 @@
             <button id="resetParticleBtn" class="button full" disabled>恢复模型位置</button>
           </div>
           <button id="saveAnimationsBtn" class="button primary full" disabled>导出动画 XML</button>
-          <p class="animation-note">编辑实时驱动预览；仅导出时写入新文件。</p>
         </section>
       </section>
     </div>

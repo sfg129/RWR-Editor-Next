@@ -73,7 +73,6 @@ export class CharacterPreviewController {
   private readonly closeButton: HTMLButtonElement;
   private readonly animationSelect: HTMLSelectElement;
   private readonly liveIndicator: HTMLElement;
-  private readonly worldBadge: HTMLElement;
   private readonly lightingSelect: HTMLSelectElement;
   private readonly voxelSizeInput: HTMLInputElement;
   private readonly voxelSizeValue: HTMLOutputElement;
@@ -130,7 +129,6 @@ export class CharacterPreviewController {
     this.closeButton = child(root, '#closeCharacterPreviewBtn');
     this.animationSelect = child(root, '#characterPreviewAnimation');
     this.liveIndicator = child(root, '#characterPreviewLiveIndicator');
-    this.worldBadge = child(root, '#characterPreviewWorldBadge');
     this.lightingSelect = child(root, '#characterPreviewLighting');
     this.voxelSizeInput = child(root, '#characterPreviewVoxelSize');
     this.voxelSizeValue = child(root, '#characterPreviewVoxelSizeValue');
@@ -433,12 +431,11 @@ export class CharacterPreviewController {
     const looping = this.animation.frames.length > 1 && this.animation.loop;
     const title = definition.label.toUpperCase();
     this.liveIndicator.lastChild!.textContent = looping ? `${title} LOOP` : title;
-    this.worldBadge.textContent = `GRASS TEST WORLD / ${title}`;
     if (!this.model || !this.rig) return;
     const animationParticles = this.animation.frames[0]?.positions.length ?? 0;
     this.status.textContent =
       this.model.skeleton.length === animationParticles
-        ? `${this.rig.boundCount} 个已绑定体素正在跟随 ${definition.label} 动画。`
+        ? ''
         : `模型有 ${this.model.skeleton.length} 个骨骼点；${definition.label} 预设提供 ${animationParticles} 个。`;
   }
 
