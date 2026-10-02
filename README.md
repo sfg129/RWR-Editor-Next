@@ -28,19 +28,7 @@ scripts/                跨平台 Bun 构建与资源维护任务
 - Tauri 2 + Rust：原生窗口、异步文件选择、受控覆盖写入和安装包生成。
 - Bun：依赖、测试、格式检查、前端构建和跨平台任务编排。
 
-模型与动画解析器位于 `src/core`，不依赖 Vue 或 Tauri。桌面原生边界只接收文本和路径信息，因此核心编辑行为可在 Bun 测试环境中独立验证。原始 XML 中未被编辑的模型结构会尽量保持语义不变。
-
-Windows 便携版支持把模型 XML 直接拖到 EXE 文件上启动；编辑器打开后会自动载入该模型，并保留原始文件路径供覆盖保存使用。
-
-移动操作台支持将所选体素绕其轮廓中点沿 X、Y、Z 轴旋转，可直接执行 90° 旋转或输入任意角度；若目标位置与其它体素冲突，操作会被整体阻止。当前模型还可保存到带编号的本机复制库，并在其它文件中自动落地到靠近模型中点且不重叠的位置。
-
-## 正式发布资产
-
-正式版本在 [Releases](https://github.com/sfg129/RWR-Editor-Next/releases) 提供以下三平台产物：
-
-- Windows：NSIS 安装程序（`.exe`）与便携版（portable `.exe`）；
-- macOS：磁盘映像（`.dmg`）与便携版（`.app.zip`）；
-- Linux：Debian 包（`.deb`）与便携版（`.AppImage`）。
+模型与动画解析器位于 `src/core`，因此核心编辑行为可在 Bun 测试环境中独立验证，原始 XML 中未被编辑的模型结构会尽量保持语义不变。
 
 ## 开发与构建
 
@@ -61,6 +49,4 @@ GitHub Actions 会在 Windows、macOS 与 Linux 上执行持续集成。正式�
 
 ## 许可
 
-本项目采用 [GNU General Public License v3.0](LICENSE)。你可以依照 GPL-3.0 使用、研究、修改和再分发本项目；分发修改版本时需要继续提供相应源代码并保留相同许可。
-
-项目仓库：[sfg129/RWR-Editor-Next](https://github.com/sfg129/RWR-Editor-Next)
+本项目采用 [GNU General Public License v3.0](LICENSE)。
