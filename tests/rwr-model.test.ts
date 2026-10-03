@@ -49,6 +49,13 @@ const TORSO_MODEL = `<?xml version="1.0" encoding="UTF-8"?>
 </model>`;
 
 describe('RWR model compatibility', () => {
+  it('creates a truly empty editable file by default', () => {
+    const empty = RwrModel.createNew();
+    expect(empty.voxels).toEqual([]);
+    expect(RwrModel.parse(empty.serialize()).voxels).toEqual([]);
+    expect(empty.addVoxel({ x: 0, y: 0, z: 0 }, { r: 1, g: 0, b: 0 })).toBeTruthy();
+    expect(empty.voxels.length).toBe(1);
+  });
   it('reads transparent voxels without turning alpha zero into one', () => {
     const model = RwrModel.parse(MODEL);
     expect(model.voxels[0]?.a).toBe(0);

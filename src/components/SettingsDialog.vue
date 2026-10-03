@@ -2,15 +2,13 @@
 import { isTauriRuntime, openExternalUrl } from '../platform/external-links';
 
 const repositoryUrl = 'https://github.com/sfg129/RWR-Editor-Next';
-
 function handleRepositoryClick(event: MouseEvent): void {
   if (!isTauriRuntime()) return;
   event.preventDefault();
-  void openExternalUrl(repositoryUrl).catch((error: unknown) => {
-    console.warn('Unable to open the repository URL.', error);
-  });
+  void openExternalUrl(repositoryUrl).catch((error: unknown) =>
+    console.warn('Unable to open the repository URL.', error),
+  );
 }
-
 const shortcuts = [
   ['newModel', '新建模型'],
   ['openModel', '打开模型'],
@@ -20,10 +18,8 @@ const shortcuts = [
   ['redo', '重做'],
   ['deleteSelection', '删除体素'],
   ['toolSelect', '选择工具'],
-  ['toolSculpt', '雕刻工具'],
+  ['toolSculpt', '修改工具'],
   ['toolPaint', '绘色工具'],
-  ['toolPicker', '取色工具'],
-  ['toolMove', '移动工具'],
   ['marqueeThrough', '穿透框选'],
   ['marqueeVisible', '可视框选'],
   ['cameraForward', '视角前进'],
@@ -43,144 +39,66 @@ const shortcuts = [
   >
     <div class="settings-dialog">
       <header>
-        <div>
-          <span class="eyebrow">SYSTEM CONFIGURATION</span>
-          <h2 id="settingsTitle">设置</h2>
-        </div>
+        <h2 id="settingsTitle">设置</h2>
         <button id="closeSettingsBtn" class="icon-button">×</button>
       </header>
       <div class="settings-body">
         <nav class="settings-nav">
-          <button class="active" data-settings-page="performance">性能</button
-          ><button data-settings-page="behavior">功能</button
-          ><button data-settings-page="appearance">外观</button
-          ><button data-settings-page="shortcuts">快捷键</button
-          ><button data-settings-page="language">语言</button><button data-settings-page="about">关于</button>
+          <button class="active" data-settings-page="settings">设置</button>
+          <button data-settings-page="shortcuts">快捷键</button>
+          <button data-settings-page="about">关于</button>
         </nav>
         <div class="settings-content">
-          <section class="settings-page active" data-page="performance">
-            <h3>性能</h3>
+          <section class="settings-page active" data-page="settings">
             <div class="setting">
-              <div><strong>性能预设</strong><small>抗锯齿、阴影与渲染倍率</small></div>
-              <select id="performancePreset">
-                <option value="quality">高质量</option>
-                <option value="balanced">均衡</option>
-                <option value="performance">高性能</option>
+              <strong>界面语言</strong
+              ><select id="languageSetting" aria-label="界面语言">
+                <option value="zh-CN">简体中文</option>
+                <option value="en">English</option>
               </select>
             </div>
             <div class="setting">
-              <div><strong>场景光照</strong><small>颜色校对接近平涂效果</small></div>
-              <select id="lightingPreset">
-                <option value="soft">柔和</option>
-                <option value="standard">标准</option>
-                <option value="bright">明亮</option>
-                <option value="color">颜色校对</option>
-              </select>
-            </div>
-            <div class="setting range-setting">
-              <div><strong>渲染倍率</strong><small id="pixelRatioValue">1.5×</small></div>
-              <input id="pixelRatioSetting" type="range" min="1" max="2" step="0.25" />
-            </div>
-            <div class="setting">
-              <div><strong>抗锯齿</strong></div>
-              <label class="switch"><input id="antialiasSetting" type="checkbox" /><span /></label>
-            </div>
-            <div class="setting">
-              <div><strong>动态阴影</strong><small>大型模型关闭后可提高帧率</small></div>
-              <label class="switch"><input id="shadowsSetting" type="checkbox" /><span /></label>
-            </div>
-            <div class="setting">
-              <div><strong>显示网格</strong></div>
-              <label class="switch"><input id="gridSetting" type="checkbox" /><span /></label>
-            </div>
-          </section>
-          <section class="settings-page" data-page="behavior">
-            <h3>功能</h3>
-            <div class="setting">
-              <div><strong>体素显示模式</strong><small>悬浮：留有间隙；网格：紧密排列并显示边线</small></div>
-              <select id="voxelDisplayModeSetting">
-                <option value="floating">悬浮模式（默认）</option>
-                <option value="grid">网格模式</option>
-              </select>
-            </div>
-            <div class="setting range-setting">
-              <div>
-                <strong>相机移动速度</strong
-                ><small><span id="cameraSpeedValue">1.0×</span> · Shift 双倍速度</small>
-              </div>
-              <input id="cameraSpeedSetting" type="range" min="0.25" max="2.5" step="0.25" />
-            </div>
-            <div class="setting">
-              <div><strong>自动恢复</strong><small>保留最近编辑快照</small></div>
-              <label class="switch"><input id="autosaveSetting" type="checkbox" /><span /></label>
-            </div>
-            <div class="setting">
-              <div><strong>删除时确认</strong><small>仅删除多个体素时询问</small></div>
-              <label class="switch"><input id="confirmDeleteSetting" type="checkbox" /><span /></label>
-            </div>
-            <div class="setting">
-              <div><strong>覆盖保存前确认</strong></div>
-              <label class="switch"><input id="confirmOverwriteSetting" type="checkbox" /><span /></label>
-            </div>
-          </section>
-          <section class="settings-page" data-page="appearance">
-            <h3>外观</h3>
-            <div class="setting">
-              <div><strong>主题</strong></div>
-              <select id="themeSetting">
+              <strong>主题</strong
+              ><select id="themeSetting" aria-label="主题">
                 <option value="dark">深色</option>
                 <option value="light">浅色</option>
               </select>
             </div>
             <div class="setting">
-              <div><strong>字体大小</strong></div>
-              <select id="fontSizeSetting">
-                <option value="16">标准（16 px）</option>
-                <option value="18">大（18 px）</option>
-                <option value="20">特大（20 px）</option>
-              </select>
-            </div>
-            <div class="setting">
-              <div><strong>主题颜色</strong></div>
-              <input id="accentSetting" type="color" />
+              <strong>主题颜色</strong><input id="accentSetting" type="color" aria-label="主题颜色" />
             </div>
             <div class="setting range-setting">
-              <div><strong>界面亮度</strong><small id="brightnessValue">100%</small></div>
-              <input id="brightnessSetting" type="range" min="70" max="125" step="5" />
+              <div><strong>字体大小</strong><output id="fontSizeValue">16 px</output></div>
+              <input
+                id="fontSizeSetting"
+                type="range"
+                min="12"
+                max="20"
+                step="1"
+                value="16"
+                aria-label="字体大小"
+              />
             </div>
             <div class="setting range-setting">
-              <div><strong>界面缩放</strong><small id="uiScaleValue">100%</small></div>
-              <input id="uiScaleSetting" type="range" min="85" max="120" step="5" />
+              <div><strong>界面缩放</strong><output id="uiScaleValue">100%</output></div>
+              <input id="uiScaleSetting" type="range" min="85" max="120" step="5" aria-label="界面缩放" />
             </div>
           </section>
           <section class="settings-page" data-page="shortcuts">
-            <h3>快捷键设置</h3>
             <div class="shortcut-list">
               <label v-for="shortcut in shortcuts" :key="shortcut[0]"
                 >{{ shortcut[1] }}<input readonly :data-shortcut-input="shortcut[0]"
               /></label>
             </div>
           </section>
-          <section class="settings-page" data-page="language">
-            <h3>语言</h3>
-            <div class="setting single-line-setting">
-              <div><strong>界面语言</strong></div>
-              <select id="languageSetting">
-                <option value="zh-CN">简体中文</option>
-                <option value="en">English</option>
-              </select>
-            </div>
-          </section>
           <section class="settings-page" data-page="about">
-            <h3>关于</h3>
             <div class="about-card">
               <div class="brand-mark large"><span /><span /><span /></div>
               <div>
                 <strong>RWR 体素编辑器 Next</strong>
-                <p>版本 0.7.2</p>
+                <p>版本 0.8</p>
               </div>
             </div>
-            <p class="about-copy">Running With Rifles 体素与动画编辑器。</p>
             <a
               class="button about-repository-link"
               :href="repositoryUrl"

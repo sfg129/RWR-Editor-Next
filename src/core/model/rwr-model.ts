@@ -119,11 +119,13 @@ export class RwrModel {
     return model;
   }
 
-  static createNew(baseVoxels: 1 | 8): RwrModel {
+  static createNew(baseVoxels: 0 | 1 | 8 = 0): RwrModel {
     const positions: Vec3[] =
-      baseVoxels === 1
-        ? [{ x: 0, y: 0, z: 0 }]
-        : [0, 1].flatMap((x) => [0, 1].flatMap((y) => [0, 1].map((z) => ({ x, y, z }))));
+      baseVoxels === 0
+        ? []
+        : baseVoxels === 1
+          ? [{ x: 0, y: 0, z: 0 }]
+          : [0, 1].flatMap((x) => [0, 1].flatMap((y) => [0, 1].map((z) => ({ x, y, z }))));
     const voxels = positions
       .map(
         ({ x, y, z }) =>

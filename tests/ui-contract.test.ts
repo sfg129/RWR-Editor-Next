@@ -23,19 +23,43 @@ describe('Vue editor DOM contract', () => {
       'Vue 3 + Tauri 2',
       'GRASS TEST WORLD',
       '调整文字尺寸',
+      '拖放 XML 文件以打开',
+      '按住 Ctrl 可同时选取多个体素',
+      '覆盖保存前确认',
+      '场景拖动可编辑',
+      '可跨文件粘贴',
+      '开始编辑 RWR 模型',
+      '大型模型关闭后可提高帧率',
+      'Running With Rifles 体素与动画编辑器。',
     ]) {
       expect(componentSource).not.toContain(copy);
     }
-    for (const copy of [
-      '拖放 XML 文件以打开',
-      '按住 Ctrl 可同时选取多个体素',
-      '此操作无法在磁盘上撤销',
-      '覆盖保存前确认',
-      '该操作可通过撤销恢复',
-    ]) {
+    for (const copy of ['此操作无法在磁盘上撤销', '该操作可通过撤销恢复']) {
       expect(componentSource).toContain(copy);
     }
     expect(controllerSource).not.toContain('载入动画 XML 后可同步预览骨骼与体素');
+  });
+
+  it('keeps only three settings pages and the marquee tool in the left rail', async () => {
+    const settings = await Bun.file('src/components/SettingsDialog.vue').text();
+    expect(uniqueMatches(settings, /data-settings-page="([^"]+)"/g)).toEqual([
+      'settings',
+      'shortcuts',
+      'about',
+    ]);
+    const rail = await Bun.file('src/components/ToolRail.vue').text();
+    expect(uniqueMatches(rail, /data-tool="([^"]+)"/g)).toEqual(['marquee']);
+    expect(rail).toContain('data-shortcut-label="marqueeThrough"');
+    expect(rail.slice(0, rail.indexOf('class="marquee-mode-menu"'))).not.toContain('<kbd');
+    expect(componentSource).not.toContain('id="activeToolLabel"');
+    expect(componentSource).not.toContain('id="emptyState"');
+    expect(componentSource).not.toContain('id="characterPreviewAnimationSource"');
+    expect(componentSource).not.toContain('id="characterPreviewVoxelSize"');
+    expect(componentSource).not.toContain('体素跟随骨骼');
+    expect(componentSource).not.toContain('id="animationVoxelToggle"');
+    expect(componentSource).not.toContain('id="animationWorkbenchToggle"');
+    expect(componentSource).toContain('id="animationWorkbenchTrigger"');
+    expect(controllerSource).not.toContain('closeColorPicker');
   });
 
   it('preserves every character-preview control required by its controller', async () => {

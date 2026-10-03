@@ -9,7 +9,6 @@
     <div class="decision-dialog">
       <header>
         <div>
-          <span class="eyebrow">UNSAVED CHANGES</span>
           <h2 id="unsavedModelTitle">新建模型前如何处理当前文件？</h2>
         </div>
       </header>
@@ -32,7 +31,6 @@
     <div class="decision-dialog">
       <header>
         <div>
-          <span class="eyebrow">OVERWRITE FILE</span>
           <h2 id="overwriteTitle">确认替换当前模型文件</h2>
         </div>
       </header>
@@ -56,7 +54,6 @@
     <div class="decision-dialog">
       <header>
         <div>
-          <span class="eyebrow">DELETE VOXELS</span>
           <h2 id="deleteSelectionTitle">确认删除所选体素</h2>
         </div>
       </header>

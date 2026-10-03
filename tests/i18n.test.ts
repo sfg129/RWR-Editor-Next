@@ -12,13 +12,13 @@ describe('runtime localization', () => {
       'Fixed camera · Left drag rotates the character',
     );
     expect(translate('拖放 XML 文件以打开')).toBe('Drop an XML file to open it');
-    expect(translate('版本 0.7.2')).toBe('Version 0.7.2');
+    expect(translate('版本 0.8')).toBe('Version 0.8');
     expect(translate('当前模型有未保存修改。')).toBe('The current model has unsaved changes.');
     expect(translate('新模型已创建。')).toBe('Model created.');
     expect(translate('动画已创建。')).toBe('Animation created.');
-    expect(translate('Running With Rifles 体素与动画编辑器。')).toBe(
-      'Voxel and animation editor for Running With Rifles.',
-    );
+    expect(translate('人物动画预览')).toBe('Character Animation Preview');
+    expect(translate('无匹配动画')).toBe('No matching animations');
+    expect(translate('已载入动画')).toBe('Loaded animations');
     expect(translate('模型有 15 个骨骼点；still 预设提供 16 个。')).toBe(
       'Model: 15 bones; still preset: 16.',
     );

@@ -2,15 +2,13 @@ import * as THREE from 'three';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import {
-  applyPreset,
-  applySettingsToDocument,
-  defaultSettings,
-  loadSettings,
-  saveSettings,
-} from '../config/settings';
+import { applySettingsToDocument, defaultSettings, loadSettings, saveSettings } from '../config/settings';
 import { VoxelAnimationRig } from '../core/animation/animation-rig';
 import { sampleAnimationPositions } from '../core/animation/sample-animation';
+import { advanceAnimation, animationDuration, resumeAnimationAt } from '../core/animation/playback';
+import { populateAnimationOptions } from './animation-options';
+import { SearchableAnimationDropdown } from './searchable-animation-dropdown';
+import { AnimationWorkbench } from './animation-workbench';
 import { cameraRelativeMotion } from '../core/camera/camera-motion';
 import { hsvToRgb, hueFromPoint, rgbToHsv, saturationValueFromPoint } from '../core/color/color-picker';
 import { RwrModel, parseAnimations, serializeAnimations } from '../core/model/rwr-model';
@@ -46,7 +44,6 @@ function element<T extends Element>(selector: string): T {
 }
 
 const viewport = element<HTMLDivElement>('#viewport');
-const emptyState = element<HTMLDivElement>('#emptyState');
 const statusText = element<HTMLSpanElement>('#statusText');
 const voxelCount = element<HTMLElement>('#voxelCount');
 const selectedCount = element<HTMLElement>('#selectedCount');
@@ -60,8 +57,9 @@ const selectionPosition = element<HTMLElement>('#selectionPosition');
 const bindingCount = element<HTMLElement>('#bindingCount');
 const unboundCount = element<HTMLElement>('#unboundCount');
 const fpsBadge = element<HTMLElement>('#fpsBadge');
-const viewModeBadge = element<HTMLElement>('#viewModeBadge');
-const colorSwatch = element<HTMLDivElement>('#colorSwatch');
+const colorSwatch = element<HTMLButtonElement>('#colorSwatch');
+const colorSampleBtn = element<HTMLButtonElement>('#colorSampleBtn');
+let colorSampling = false;
 const colorPickerPopover = element<HTMLDivElement>('#colorPickerPopover');
 const hueRing = element<HTMLDivElement>('#hueRing');
 const hueHandle = element<HTMLSpanElement>('#hueHandle');
@@ -76,7 +74,6 @@ const blueSliderValue = element<HTMLOutputElement>('#blueSliderValue');
 const redValue = element<HTMLOutputElement>('#redValue');
 const greenValue = element<HTMLOutputElement>('#greenValue');
 const blueValue = element<HTMLOutputElement>('#blueValue');
-const activeToolLabel = element<HTMLElement>('#activeToolLabel');
 const marqueeSelection = element<HTMLDivElement>('#marqueeSelection');
 const deleteSelectionBtn = element<HTMLButtonElement>('#deleteSelectionBtn');
 const rotateAxisButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-rotate-axis]'));
@@ -97,13 +94,23 @@ const modelFileInput = element<HTMLInputElement>('#modelFileInput');
 const animationFileInput = element<HTMLInputElement>('#animationFileInput');
 const fileDialogInteractionGuard = element<HTMLDivElement>('#fileDialogInteractionGuard');
 const animationSelect = element<HTMLSelectElement>('#animationSelect');
+const animationDropdown = new SearchableAnimationDropdown(element<HTMLElement>('#animationDropdown'));
 const animationPlayBtn = element<HTMLButtonElement>('#animationPlayBtn');
 const animationTime = element<HTMLInputElement>('#animationTime');
 const animationClock = element<HTMLElement>('#animationClock');
 const animationInfo = element<HTMLElement>('#animationInfo');
-const animationVoxelToggle = element<HTMLInputElement>('#animationVoxelToggle');
-const animationBindingStatus = element<HTMLElement>('#animationBindingStatus');
-const animationWorkspace = element<HTMLDetailsElement>('#animationWorkspace');
+const animationWorkbench = new AnimationWorkbench(
+  element<HTMLElement>('#animationWorkspace'),
+  element<HTMLButtonElement>('#animationWorkbenchTrigger'),
+  element<HTMLElement>('#animationWorkspaceContent'),
+  () => {
+    animationPlaying = false;
+    animationDropdown.close();
+    updateBoneEditingState();
+    renderAnimationPose(animationPage === 'edit' ? currentKeyframe()?.positions : undefined);
+    updateAnimationUi();
+  },
+);
 const animationSummaryStatus = element<HTMLElement>('#animationSummaryStatus');
 const newAnimationBtn = element<HTMLButtonElement>('#newAnimationBtn');
 const duplicateAnimationBtn = element<HTMLButtonElement>('#duplicateAnimationBtn');
@@ -217,9 +224,7 @@ const lightingPresets: Record<
   EditorSettings['lightingPreset'],
   { ambient: number; fill: number; key: number; rim: number; exposure: number }
 > = {
-  soft: { ambient: 1.2, fill: 0.35, key: 1.3, rim: 0.35, exposure: 0.92 },
   standard: { ambient: 1.65, fill: 0.55, key: 2.2, rim: 0.65, exposure: 1 },
-  bright: { ambient: 2.2, fill: 1.05, key: 2.9, rim: 0.85, exposure: 1.08 },
   color: { ambient: 2.8, fill: 1.65, key: 0.25, rim: 0.12, exposure: 1 },
 };
 
@@ -294,10 +299,8 @@ const boneDragNormal = new THREE.Vector3();
 
 const toolCopy: Record<ToolId, { label: string }> = {
   select: { label: '选择' },
-  sculpt: { label: '雕刻' },
+  sculpt: { label: '修改' },
   paint: { label: '绘色' },
-  picker: { label: '取色' },
-  move: { label: '移动' },
   marquee: { label: '框选' },
 };
 
@@ -335,6 +338,7 @@ const characterPreview = new CharacterPreviewController({
   root: characterPreviewModal,
   trigger: characterPreviewBtn,
   getModel: () => model,
+  getAnimations: () => animations,
   notify: toast,
   getCameraSpeed: () => settings.cameraSpeed,
 });
@@ -383,11 +387,6 @@ function setCurrentColor(r: number, g: number, b: number): void {
 function setCurrentColorFromHsv(): void {
   pickedColor = hsvToRgb(colorPickerHsv);
   renderCurrentColor();
-}
-
-function closeColorPicker(): void {
-  colorPickerPopover.classList.add('hidden');
-  colorSwatch.setAttribute('aria-expanded', 'false');
 }
 
 function toggleColorPicker(): void {
@@ -503,7 +502,7 @@ function rebuildVoxelMesh(): void {
 
 function applyVoxelAnimation(animatedPositions?: Vec3[]): void {
   if (!model || !voxelMesh) return;
-  const driveVoxels = Boolean(animatedPositions && animationVoxelToggle.checked && animationRig?.boundCount);
+  const driveVoxels = Boolean(animatedPositions && animationWorkbench.isOpen() && animationRig?.boundCount);
   instanceVoxels.forEach((voxel, index) => {
     if (driveVoxels && animationRig!.getPose(index, animatedPositions!, posePosition, poseRotation)) {
       poseMatrix.compose(posePosition, poseRotation, poseScale);
@@ -686,18 +685,11 @@ function updateStats(): void {
 }
 
 function updateAnimationBindingStatus(): void {
-  const total = model?.voxels.length ?? 0;
-  const bound = animationRig?.boundCount ?? 0;
-  animationVoxelToggle.disabled = !model?.skeleton.length || bound === 0;
-  if (!model) animationBindingStatus.textContent = '请先载入模型';
-  else if (!model.skeleton.length) animationBindingStatus.textContent = '模型没有骨骼';
-  else if (!bound) animationBindingStatus.textContent = '没有可用的体素绑定';
-  else if (bound === total) animationBindingStatus.textContent = `${bound} / ${total} 个体素已绑定`;
-  else animationBindingStatus.textContent = `${bound} / ${total} 已绑定 · ${total - bound} 个保持原位`;
+  updateAnimationUi();
 }
 
 function frameModel(): void {
-  if (!model || !model.voxels.length) return;
+  if (!model) return;
   const { min, max, center } = model.bounds;
   const size = Math.max(max.x - min.x, max.y - min.y, max.z - min.z, 10);
   controls.target.set(center.x, center.y, center.z);
@@ -717,8 +709,7 @@ function loadModelText(text: string, name: string, path = ''): void {
     undoStack = [];
     redoStack = [];
     modelName.textContent = name;
-    modelPath.textContent = path || '未命名模型 · 请使用“另存为”';
-    emptyState.classList.add('hidden');
+    modelPath.textContent = path;
     rebuildVoxelMesh();
     renderAnimationPose();
     frameModel();
@@ -787,15 +778,13 @@ function loadAnimationText(text: string, name: string): void {
     animationDirty = false;
     selectedFrameIndex = 0;
     updateAnimationSelect();
-    animationPlayBtn.disabled = !activeAnimation || !model?.skeleton.length;
-    animationTime.disabled = !activeAnimation;
     animationElapsed = 0;
     animationPlaying = false;
     animationPlayBtn.textContent = '▶';
     updateAnimationUi();
     renderAnimationPose();
     updateAnimationEditor();
-    animationWorkspace.open = true;
+    animationWorkbench.setOpen(true);
     toast(`已载入 ${animations.length} 个动画`, 'success');
   } catch (error) {
     toast(error instanceof Error ? error.message : '无法读取动画文件。', 'warning');
@@ -839,30 +828,24 @@ function ensureFramePositions(frame: RwrAnimation['frames'][number]): void {
 
 function updateAnimationSelect(): void {
   const activeIndex = activeAnimation ? animations.indexOf(activeAnimation) : -1;
-  animationSelect.replaceChildren();
-  if (!animations.length) {
-    const option = document.createElement('option');
-    option.textContent = '未载入动画文件';
-    animationSelect.appendChild(option);
-  } else {
-    animations.forEach((animation, index) => {
-      const option = document.createElement('option');
-      option.value = String(index);
-      option.textContent = `${animation.name} · ${animation.frames.length} 帧`;
-      animationSelect.appendChild(option);
-    });
-  }
-  animationSelect.disabled = !animations.length;
-  if (activeIndex >= 0) animationSelect.value = String(activeIndex);
+  populateAnimationOptions(
+    animationSelect,
+    animations.map((animation, index) => ({
+      id: String(index),
+      label: animation.name,
+    })),
+    '',
+    String(activeIndex),
+  );
+  animationDropdown.refresh();
+  characterPreview.refreshAnimations();
 }
 
 function updateAnimationWorkspaceStatus(): void {
   animationSummaryStatus.textContent = animations.length
     ? `${animations.length} 个动画${animationDirty ? ' · 未导出' : ''}`
     : '未载入动画';
-  animationInfo.textContent = animations.length
-    ? `${currentAnimationFileName} · 共 ${animations.length} 个动画${animationDirty ? ' · 有未导出修改' : ''}`
-    : '';
+  animationInfo.textContent = currentAnimationFileName;
   saveAnimationsBtn.disabled = !animations.length;
 }
 
@@ -941,6 +924,7 @@ function updateAnimationEditor(): void {
   if (model?.skeleton.length) particleSelect.value = String(selectedParticleIndex);
   updateParticleFields();
   updateAnimationWorkspaceStatus();
+  updateAnimationUi();
   updateBoneEditingState();
 }
 
@@ -977,6 +961,7 @@ function commit(
   failureMessage = '目标位置被其它体素占用。',
 ): void {
   if (!model) return;
+  exitVoxelAnimationPreview();
   const before = model.snapshot();
   const result = operation();
   if (result === false) {
@@ -994,6 +979,7 @@ function commit(
 
 function undo(): void {
   if (!model || !undoStack.length) return;
+  exitVoxelAnimationPreview();
   redoStack.push(model.snapshot());
   model.restore(undoStack.pop()!);
   selectedIds = new Set([...selectedIds].filter((id) => model!.voxels.some((voxel) => voxel.id === id)));
@@ -1004,6 +990,7 @@ function undo(): void {
 
 function redo(): void {
   if (!model || !redoStack.length) return;
+  exitVoxelAnimationPreview();
   undoStack.push(model.snapshot());
   model.restore(redoStack.pop()!);
   selectedIds = new Set([...selectedIds].filter((id) => model!.voxels.some((voxel) => voxel.id === id)));
@@ -1031,7 +1018,7 @@ function scheduleAutosave(): void {
 function setTool(tool: ToolId): void {
   if (tool !== 'marquee' && marqueePointerId !== null) releaseMarqueePointer(marqueePointerId);
   activeTool = tool;
-  document.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach((button) => {
+  document.querySelectorAll<HTMLButtonElement>('button[data-tool]').forEach((button) => {
     const active = button.dataset.tool === tool;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', String(active));
@@ -1039,9 +1026,8 @@ function setTool(tool: ToolId): void {
   document.querySelectorAll<HTMLElement>('[data-tool-panel]').forEach((panel) => {
     panel.classList.toggle('tool-panel-hidden', !panel.dataset.toolPanel?.split(' ').includes(tool));
   });
-  activeToolLabel.textContent = toolCopy[tool].label;
   viewport.dataset.tool = tool;
-  if (tool === 'select' || tool === 'move' || tool === 'marquee') closeColorPicker();
+  setColorSampling(false);
   setStatus(`工具：${toolCopy[tool].label}`);
 }
 
@@ -1154,6 +1140,7 @@ function updateMarqueeOverlay(x: number, y: number): ScreenRect {
 
 function beginMarquee(event: PointerEvent): boolean {
   if (activeTool !== 'marquee' || event.button !== 0) return false;
+  exitVoxelAnimationPreview();
   releaseCameraInput();
   const rect = renderer.domElement.getBoundingClientRect();
   marqueePointerId = event.pointerId;
@@ -1217,7 +1204,9 @@ function cancelMarquee(pointerId: number): boolean {
 
 function boneEditingAvailable(): boolean {
   return (
-    animationPage === 'edit' && Boolean(model?.skeleton.length && currentKeyframe() && settings.showSkeleton)
+    animationWorkbench.isOpen() &&
+    animationPage === 'edit' &&
+    Boolean(model?.skeleton.length && currentKeyframe() && settings.showSkeleton)
   );
 }
 
@@ -1300,12 +1289,25 @@ function endBoneDrag(pointerId: number): boolean {
   return true;
 }
 
+function setColorSampling(enabled: boolean): void {
+  colorSampling = enabled;
+  colorSampleBtn.classList.toggle('active', enabled);
+  colorSampleBtn.setAttribute('aria-pressed', String(enabled));
+  viewport.dataset.colorSampling = String(enabled);
+  if (enabled) {
+    viewport.focus({ preventScroll: true });
+  }
+}
+
+function exitVoxelAnimationPreview(): void {
+  if (!activeAnimation || !animationWorkbench.isOpen() || !animationRig?.boundCount) return;
+  animationWorkbench.setOpen(false);
+  toast('已退出动画预览');
+}
+
 function handleVoxelAction(event: PointerEvent): void {
   if (!model) return;
-  if (activeAnimation && animationVoxelToggle.checked && animationRig?.boundCount) {
-    toast('动画体素预览中不可编辑；关闭“体素跟随骨骼”后可继续编辑。', 'warning');
-    return;
-  }
+  exitVoxelAnimationPreview();
   const hit = hitVoxel(event);
   if (!hit) {
     if (activeTool === 'select' && !event.ctrlKey) {
@@ -1316,7 +1318,7 @@ function handleVoxelAction(event: PointerEvent): void {
     return;
   }
   const { voxel } = hit;
-  if (activeTool === 'select' || activeTool === 'move') {
+  if (activeTool === 'select') {
     if (!event.ctrlKey) selectedIds.clear();
     if (event.ctrlKey && selectedIds.has(voxel.id)) selectedIds.delete(voxel.id);
     else selectedIds.add(voxel.id);
@@ -1324,18 +1326,11 @@ function handleVoxelAction(event: PointerEvent): void {
     updateStats();
     return;
   }
-  if (activeTool === 'picker') {
-    setCurrentColor(voxel.r, voxel.g, voxel.b);
-    toast('已吸取体素颜色', 'success');
-  }
 }
 
 function handleSculptDelete(event: PointerEvent): void {
   if (!model || activeTool !== 'sculpt') return;
-  if (activeAnimation && animationVoxelToggle.checked && animationRig?.boundCount) {
-    toast('动画体素预览中不可编辑；关闭“体素跟随骨骼”后可继续编辑。', 'warning');
-    return;
-  }
+  exitVoxelAnimationPreview();
   const hit = hitVoxel(event);
   if (!hit) return;
   const { voxel } = hit;
@@ -1347,12 +1342,7 @@ function handleSculptDelete(event: PointerEvent): void {
 
 function beginVoxelStroke(event: PointerEvent): boolean {
   if (event.button !== 0 || (activeTool !== 'paint' && activeTool !== 'sculpt') || !model) return false;
-  if (activeAnimation && animationVoxelToggle.checked && animationRig?.boundCount) {
-    toast('动画体素预览中不可编辑；关闭“体素跟随骨骼”后可继续编辑。', 'warning');
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    return true;
-  }
+  exitVoxelAnimationPreview();
   voxelStroke = {
     pointerId: event.pointerId,
     before: model.snapshot(),
@@ -1372,7 +1362,21 @@ function beginVoxelStroke(event: PointerEvent): boolean {
 function applyVoxelStrokePoint(event: PointerEvent): void {
   if (!voxelStroke || !model) return;
   const hit = hitVoxel(event, voxelStroke.tool === 'sculpt' ? voxelStroke.sourceVoxelIds : undefined);
-  if (!hit) return;
+  if (!hit) {
+    if (voxelStroke.tool !== 'sculpt' || model.voxels.length) return;
+    updatePointer(event);
+    raycaster.setFromCamera(pointer, camera);
+    const point = raycaster.ray.intersectPlane(
+      new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.5),
+      new THREE.Vector3(),
+    );
+    if (!point || !model.addVoxel({ x: Math.round(point.x), y: 0, z: Math.round(point.z) }, currentColor()))
+      return;
+    voxelStroke.changedCount += 1;
+    rebuildVoxelMesh();
+    updateStats();
+    return;
+  }
   const { voxel, normal } = hit;
 
   if (voxelStroke.tool === 'paint') {
@@ -1530,7 +1534,6 @@ async function openFile(kind: 'model' | 'animation'): Promise<void> {
     return;
   if (!fileDialogGate.tryOpen()) return;
   releaseCameraInput();
-  closeColorPicker();
   closeFileMenu();
   if (desktopBridge.isAvailable()) {
     try {
@@ -1622,17 +1625,16 @@ async function overwriteModel(): Promise<boolean> {
   }
 }
 
-function createNewModel(base: 1 | 8): void {
-  model = RwrModel.createNew(base);
-  model.dirty = true;
+function createNewModel(announce = true): void {
+  model = RwrModel.createNew();
+  setColorSampling(false);
   currentFileName = 'untitled.xml';
   currentFilePath = '';
   selectedIds.clear();
   undoStack = [];
   redoStack = [];
   modelName.textContent = 'untitled.xml';
-  modelPath.textContent = '未命名模型 · 请使用“另存为”';
-  emptyState.classList.add('hidden');
+  modelPath.textContent = '';
   unsavedModelModal.classList.add('hidden');
   rebuildVoxelMesh();
   renderAnimationPose();
@@ -1640,8 +1642,8 @@ function createNewModel(base: 1 | 8): void {
   updateStats();
   updateAnimationEditor();
   setTool('sculpt');
-  setStatus(`已创建含 ${base} 个基点体素的新模型`, 'success');
-  toast('新模型已创建。', 'success');
+  setStatus('就绪');
+  if (announce) toast('新模型已创建。', 'success');
 }
 
 function switchAnimationPage(page: 'preview' | 'edit'): void {
@@ -1682,7 +1684,7 @@ function createAnimation(): void {
   updateAnimationUi();
   updateAnimationEditor();
   renderAnimationPose(animation.frames[0]!.positions);
-  animationWorkspace.open = true;
+  animationWorkbench.setOpen(true);
   switchAnimationPage('edit');
   toast('动画已创建。', 'success');
 }
@@ -1822,11 +1824,20 @@ async function readInputFile(input: HTMLInputElement, kind: 'model' | 'animation
 }
 
 function updateAnimationUi(): void {
+  const canPlay = Boolean(
+    activeAnimation?.frames.length && model?.skeleton.length && animationDuration(activeAnimation) > 0,
+  );
+  animationPlayBtn.disabled = !canPlay;
+  animationTime.disabled = !activeAnimation?.frames.length;
+  if (!canPlay) animationPlaying = false;
+  animationPlayBtn.textContent = animationPlaying ? 'Ⅱ' : '▶';
+  animationPlayBtn.setAttribute('aria-label', animationPlaying ? '暂停' : '播放');
   if (!activeAnimation) {
     animationClock.textContent = '0.00s';
+    animationTime.value = '0';
     return;
   }
-  const end = Math.max(activeAnimation.end, activeAnimation.frames.at(-1)?.time ?? 0, 0.001);
+  const end = Math.max(animationDuration(activeAnimation), 0.001);
   animationTime.value = String(Math.round((animationElapsed / end) * 1000));
   animationClock.textContent = `${animationElapsed.toFixed(2)}s`;
 }
@@ -1836,8 +1847,10 @@ function sampledAnimationPositions(animation: RwrAnimation, time: number): Vec3[
 }
 
 function renderAnimationPose(positions?: Vec3[]): void {
-  const pose =
-    positions ?? (activeAnimation ? sampledAnimationPositions(activeAnimation, animationElapsed) : undefined);
+  const pose = animationWorkbench.isOpen()
+    ? (positions ??
+      (activeAnimation ? sampledAnimationPositions(activeAnimation, animationElapsed) : undefined))
+    : skeletonPositions();
   rebuildSkeleton(pose);
   applyVoxelAnimation(pose);
 }
@@ -1853,8 +1866,6 @@ const shortcutActions: ShortcutAction[] = [
   'toolSelect',
   'toolSculpt',
   'toolPaint',
-  'toolPicker',
-  'toolMove',
   'marqueeThrough',
   'marqueeVisible',
   'cameraForward',
@@ -1917,7 +1928,6 @@ function applySettings(): void {
   controls.panSpeed = settings.cameraSpeed;
   controls.enableRotate = false;
   controls.enablePan = false;
-  viewModeBadge.textContent = '右键拖动视角 · 透视';
   updateShortcutLabels();
   updateBoneEditingState();
   rebuildVoxelMesh();
@@ -1926,28 +1936,12 @@ function applySettings(): void {
 }
 
 function populateSettingsForm(): void {
-  element<HTMLSelectElement>('#performancePreset').value = settings.performancePreset;
-  element<HTMLSelectElement>('#lightingPreset').value = settings.lightingPreset;
-  element<HTMLInputElement>('#antialiasSetting').checked = settings.antialias;
-  element<HTMLInputElement>('#shadowsSetting').checked = settings.shadows;
-  element<HTMLInputElement>('#pixelRatioSetting').value = String(settings.pixelRatio);
-  element<HTMLElement>('#pixelRatioValue').textContent =
-    `${settings.pixelRatio.toFixed(2).replace(/0$/, '')}×`;
-  element<HTMLInputElement>('#gridSetting').checked = settings.showGrid;
-  element<HTMLInputElement>('#cameraSpeedSetting').value = String(settings.cameraSpeed);
-  element<HTMLElement>('#cameraSpeedValue').textContent =
-    `${settings.cameraSpeed.toFixed(2).replace(/0$/, '')}×`;
-  element<HTMLSelectElement>('#voxelDisplayModeSetting').value = settings.voxelDisplayMode;
-  element<HTMLInputElement>('#autosaveSetting').checked = settings.autosave;
-  element<HTMLInputElement>('#confirmDeleteSetting').checked = settings.confirmDelete;
-  element<HTMLInputElement>('#confirmOverwriteSetting').checked = settings.confirmOverwrite;
   element<HTMLSelectElement>('#themeSetting').value = settings.theme;
   element<HTMLInputElement>('#accentSetting').value = settings.accent;
-  element<HTMLInputElement>('#brightnessSetting').value = String(settings.brightness);
-  element<HTMLElement>('#brightnessValue').textContent = `${settings.brightness}%`;
   element<HTMLInputElement>('#uiScaleSetting').value = String(settings.uiScale);
-  element<HTMLElement>('#uiScaleValue').textContent = `${settings.uiScale}%`;
-  element<HTMLSelectElement>('#fontSizeSetting').value = String(settings.fontSize);
+  element<HTMLOutputElement>('#uiScaleValue').value = `${settings.uiScale}%`;
+  element<HTMLInputElement>('#fontSizeSetting').value = String(settings.fontSize);
+  element<HTMLOutputElement>('#fontSizeValue').value = `${settings.fontSize} px`;
   element<HTMLSelectElement>('#languageSetting').value = settings.language;
   document.querySelectorAll<HTMLInputElement>('[data-shortcut-input]').forEach((input) => {
     input.value = settings.shortcuts[input.dataset.shortcutInput as ShortcutAction];
@@ -1977,59 +1971,6 @@ function bindSettings(): void {
         );
     }),
   );
-  element<HTMLSelectElement>('#performancePreset').addEventListener('change', (event) => {
-    settings.performancePreset = (event.target as HTMLSelectElement)
-      .value as EditorSettings['performancePreset'];
-    settings = applyPreset(settings);
-    populateSettingsForm();
-    applySettings();
-    toast('性能预设已应用；抗锯齿将在下次启动时完全生效。');
-  });
-  element<HTMLSelectElement>('#lightingPreset').addEventListener('change', (event) => {
-    settings.lightingPreset = (event.target as HTMLSelectElement).value as EditorSettings['lightingPreset'];
-    applySettings();
-    toast('场景光照已切换。', 'success');
-  });
-  element<HTMLInputElement>('#antialiasSetting').addEventListener('change', (event) => {
-    settings.antialias = (event.target as HTMLInputElement).checked;
-    applySettings();
-  });
-  element<HTMLInputElement>('#shadowsSetting').addEventListener('change', (event) => {
-    settings.shadows = (event.target as HTMLInputElement).checked;
-    applySettings();
-  });
-  element<HTMLInputElement>('#gridSetting').addEventListener('change', (event) => {
-    settings.showGrid = (event.target as HTMLInputElement).checked;
-    applySettings();
-  });
-  element<HTMLInputElement>('#pixelRatioSetting').addEventListener('input', (event) => {
-    settings.pixelRatio = Number((event.target as HTMLInputElement).value);
-    populateSettingsForm();
-    applySettings();
-  });
-  element<HTMLInputElement>('#cameraSpeedSetting').addEventListener('input', (event) => {
-    settings.cameraSpeed = Number((event.target as HTMLInputElement).value);
-    populateSettingsForm();
-    applySettings();
-  });
-  element<HTMLSelectElement>('#voxelDisplayModeSetting').addEventListener('change', (event) => {
-    settings.voxelDisplayMode = (event.target as HTMLSelectElement)
-      .value as EditorSettings['voxelDisplayMode'];
-    applySettings();
-    toast(settings.voxelDisplayMode === 'grid' ? '已启用紧密网格体素。' : '已启用悬浮体素。', 'success');
-  });
-  element<HTMLInputElement>('#autosaveSetting').addEventListener('change', (event) => {
-    settings.autosave = (event.target as HTMLInputElement).checked;
-    applySettings();
-  });
-  element<HTMLInputElement>('#confirmDeleteSetting').addEventListener('change', (event) => {
-    settings.confirmDelete = (event.target as HTMLInputElement).checked;
-    applySettings();
-  });
-  element<HTMLInputElement>('#confirmOverwriteSetting').addEventListener('change', (event) => {
-    settings.confirmOverwrite = (event.target as HTMLInputElement).checked;
-    applySettings();
-  });
   element<HTMLSelectElement>('#themeSetting').addEventListener('change', (event) => {
     settings.theme = (event.target as HTMLSelectElement).value as EditorSettings['theme'];
     applySettings();
@@ -2038,18 +1979,14 @@ function bindSettings(): void {
     settings.accent = (event.target as HTMLInputElement).value;
     applySettings();
   });
-  element<HTMLInputElement>('#brightnessSetting').addEventListener('input', (event) => {
-    settings.brightness = Number((event.target as HTMLInputElement).value);
-    populateSettingsForm();
-    applySettings();
-  });
   element<HTMLInputElement>('#uiScaleSetting').addEventListener('input', (event) => {
     settings.uiScale = Number((event.target as HTMLInputElement).value);
     populateSettingsForm();
     applySettings();
   });
-  element<HTMLSelectElement>('#fontSizeSetting').addEventListener('change', (event) => {
-    settings.fontSize = Number((event.target as HTMLSelectElement).value) as EditorSettings['fontSize'];
+  element<HTMLInputElement>('#fontSizeSetting').addEventListener('input', (event) => {
+    settings.fontSize = Number((event.target as HTMLInputElement).value);
+    populateSettingsForm();
     applySettings();
   });
   element<HTMLSelectElement>('#languageSetting').addEventListener('change', (event) => {
@@ -2061,6 +1998,7 @@ function bindSettings(): void {
       event.preventDefault();
       event.stopPropagation();
       if (event.key === 'Escape') {
+        setColorSampling(false);
         input.blur();
         return;
       }
@@ -2089,7 +2027,7 @@ function bindSettings(): void {
 }
 
 document
-  .querySelectorAll<HTMLButtonElement>('[data-tool]')
+  .querySelectorAll<HTMLButtonElement>('button[data-tool]')
   .forEach((button) => button.addEventListener('click', () => setTool(button.dataset.tool as ToolId)));
 
 function activateMarqueeMode(mode: 'visible' | 'through'): void {
@@ -2108,6 +2046,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-marquee-mode]').forEach((but
     activateMarqueeMode(button.dataset.marqueeMode === 'through' ? 'through' : 'visible');
   }),
 );
+colorSampleBtn.addEventListener('click', () => setColorSampling(!colorSampling));
 colorSwatch.addEventListener('click', (event) => {
   event.stopPropagation();
   toggleColorPicker();
@@ -2144,10 +2083,6 @@ bindColorPickerSurface(colorSquare, (event) => {
     setCurrentColor(color.r, color.g, color.b);
   });
 });
-document.addEventListener('pointerdown', (event) => {
-  const target = event.target as Element;
-  if (!target.closest('#colorPickerPopover,#colorSwatch')) closeColorPicker();
-});
 function closeFileMenu(): void {
   fileMenu.classList.add('hidden');
   fileMenuBtn.setAttribute('aria-expanded', 'false');
@@ -2155,11 +2090,11 @@ function closeFileMenu(): void {
 function requestNewModel(): void {
   closeFileMenu();
   if (model?.dirty) unsavedModelModal.classList.remove('hidden');
-  else createNewModel(1);
+  else createNewModel();
 }
 async function saveBeforeNew(forceSaveAs: boolean): Promise<void> {
   const saved = forceSaveAs || !currentFilePath ? await saveModelAs() : await overwriteModel();
-  if (saved) createNewModel(1);
+  if (saved) createNewModel();
 }
 fileMenuBtn.addEventListener('click', (event) => {
   event.stopPropagation();
@@ -2171,10 +2106,9 @@ document.addEventListener('pointerdown', (event) => {
   if (!(event.target as Element).closest('.file-menu-wrap')) closeFileMenu();
 });
 element('#newModelBtn').addEventListener('click', requestNewModel);
-element('#emptyNewBtn').addEventListener('click', requestNewModel);
 element('#saveBeforeNewBtn').addEventListener('click', () => void saveBeforeNew(false));
 element('#saveAsBeforeNewBtn').addEventListener('click', () => void saveBeforeNew(true));
-element('#discardBeforeNewBtn').addEventListener('click', () => createNewModel(1));
+element('#discardBeforeNewBtn').addEventListener('click', () => createNewModel());
 element('#cancelBeforeNewBtn').addEventListener('click', () => unsavedModelModal.classList.add('hidden'));
 unsavedModelModal.addEventListener('pointerdown', (event) => {
   if (event.target === unsavedModelModal) unsavedModelModal.classList.add('hidden');
@@ -2191,7 +2125,6 @@ element('#openModelBtn').addEventListener('click', () => {
   closeFileMenu();
   void openFile('model');
 });
-element('#emptyOpenBtn').addEventListener('click', () => void openFile('model'));
 element('#openAnimationBtn').addEventListener('click', () => void openFile('animation'));
 saveAsBtn.addEventListener('click', () => {
   closeFileMenu();
@@ -2284,6 +2217,7 @@ skeletonToggle.addEventListener('change', () => {
 });
 
 animationSelect.addEventListener('change', () => {
+  if (animationSelect.value === '') return;
   activeAnimation = animations[Number(animationSelect.value)] ?? null;
   selectedFrameIndex = 0;
   animationElapsed = activeAnimation?.frames[0]?.time ?? 0;
@@ -2294,21 +2228,20 @@ animationSelect.addEventListener('change', () => {
   renderAnimationPose(activeAnimation?.frames[0]?.positions);
 });
 animationPlayBtn.addEventListener('click', () => {
-  if (!activeAnimation) return;
+  if (!activeAnimation || !model?.skeleton.length) return;
+  if (!animationPlaying) animationElapsed = resumeAnimationAt(activeAnimation, animationElapsed);
   animationPlaying = !animationPlaying;
-  animationPlayBtn.textContent = animationPlaying ? 'Ⅱ' : '▶';
+  renderAnimationPose();
+  updateAnimationUi();
 });
+
 animationTime.addEventListener('input', () => {
   if (!activeAnimation) return;
   animationPlaying = false;
   animationPlayBtn.textContent = '▶';
-  animationElapsed = (Number(animationTime.value) / 1000) * activeAnimation.end;
+  animationElapsed = (Number(animationTime.value) / 1000) * animationDuration(activeAnimation);
   renderAnimationPose(sampledAnimationPositions(activeAnimation, animationElapsed));
   updateAnimationUi();
-});
-animationVoxelToggle.addEventListener('change', () => {
-  renderAnimationPose();
-  toast(animationVoxelToggle.checked ? '体素将跟随骨骼动画。' : '体素已恢复模型初始姿势。', 'success');
 });
 document
   .querySelectorAll<HTMLButtonElement>('[data-animation-page]')
@@ -2420,6 +2353,17 @@ renderer.domElement.addEventListener(
     if (event.button !== 0 && event.button !== 2) return;
     pointerDown = { x: event.clientX, y: event.clientY };
     pointerDragged = false;
+    if (event.button === 0 && colorSampling) {
+      const hit = hitVoxel(event);
+      if (hit) {
+        setCurrentColor(hit.voxel.r, hit.voxel.g, hit.voxel.b);
+        setColorSampling(false);
+      }
+      pointerDragged = true;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     if (beginMarquee(event)) return;
     if (beginBoneDrag(event)) return;
     if (beginVoxelStroke(event)) return;
@@ -2530,8 +2474,6 @@ function runShortcutAction(action: ShortcutAction): void {
     toolSelect: 'select',
     toolSculpt: 'sculpt',
     toolPaint: 'paint',
-    toolPicker: 'picker',
-    toolMove: 'move',
   };
   if (tools[action]) {
     setTool(tools[action]!);
@@ -2557,7 +2499,7 @@ window.addEventListener(
     if (event.key === 'Shift') shiftHeld = true;
     const target = event.target as HTMLElement;
     if (event.key === 'Escape') {
-      closeColorPicker();
+      setColorSampling(false);
       closeFileMenu();
       if (!deleteSelectionModal.classList.contains('hidden')) closeDeleteSelectionModal();
       else if (!overwriteModal.classList.contains('hidden')) closeOverwriteModal(false);
@@ -2604,8 +2546,7 @@ void bindDesktopFileDrop();
 renderVoxelBlockLibrary();
 setCurrentColor(pickedColor.r, pickedColor.g, pickedColor.b);
 applySettings();
-updateStats();
-updateAnimationEditor();
+createNewModel(false);
 setTool('select');
 void loadStartupModel();
 
@@ -2634,15 +2575,9 @@ function animate(now: number): void {
   moveCameraWithKeyboard(delta);
   controls.update();
   if (animationPlaying && activeAnimation) {
-    animationElapsed += delta * activeAnimation.speed;
-    if (animationElapsed > activeAnimation.end) {
-      if (activeAnimation.loop) animationElapsed %= Math.max(activeAnimation.end, 0.001);
-      else {
-        animationElapsed = activeAnimation.end;
-        animationPlaying = false;
-        animationPlayBtn.textContent = '▶';
-      }
-    }
+    const playback = advanceAnimation(activeAnimation, animationElapsed, delta);
+    animationElapsed = playback.elapsed;
+    animationPlaying = playback.playing;
     renderAnimationPose(sampledAnimationPositions(activeAnimation, animationElapsed));
     updateAnimationUi();
   }

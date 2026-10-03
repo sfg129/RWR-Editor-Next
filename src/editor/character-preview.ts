@@ -3,19 +3,23 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import previewAnimationsXml from '../assets/character-preview-animations.xml?raw';
 import { VoxelAnimationRig } from '../core/animation/animation-rig';
 import { sampleAnimationPositions } from '../core/animation/sample-animation';
+import { advanceAnimation } from '../core/animation/playback';
+import { populateAnimationOptions } from './animation-options';
+import { SearchableAnimationDropdown } from './searchable-animation-dropdown';
 import { cameraRelativeMotion } from '../core/camera/camera-motion';
 import { RwrModel, parseAnimations } from '../core/model/rwr-model';
 import type { RwrAnimation } from '../core/types';
 import { isNativeControlTarget, isTextEntryTarget, releasePressedActions } from './focus-policy';
 
 type NoticeKind = 'success' | 'warning' | 'normal';
-type LightingPreset = 'soft' | 'standard' | 'bright' | 'color';
+type LightingPreset = 'standard' | 'color';
 type CameraAction = 'forward' | 'back' | 'left' | 'right';
 
 interface CharacterPreviewOptions {
   root: HTMLDivElement;
   trigger: HTMLButtonElement;
   getModel: () => RwrModel | null;
+  getAnimations: () => RwrAnimation[];
   notify: (message: string, type?: NoticeKind) => void;
   getCameraSpeed: () => number;
 }
@@ -56,9 +60,7 @@ const lightingPresets: Record<
   LightingPreset,
   { hemisphere: number; fill: number; key: number; rim: number; exposure: number }
 > = {
-  soft: { hemisphere: 1.25, fill: 0.3, key: 1.45, rim: 0.3, exposure: 0.92 },
   standard: { hemisphere: 1.6, fill: 0.5, key: 2.15, rim: 0.55, exposure: 1 },
-  bright: { hemisphere: 2.1, fill: 0.9, key: 2.85, rim: 0.75, exposure: 1.08 },
   color: { hemisphere: 2.6, fill: 1.4, key: 0.3, rim: 0.1, exposure: 1 },
 };
 
@@ -72,17 +74,16 @@ export class CharacterPreviewController {
   private readonly viewport: HTMLDivElement;
   private readonly closeButton: HTMLButtonElement;
   private readonly animationSelect: HTMLSelectElement;
+  private readonly animationDropdown: SearchableAnimationDropdown;
+  private presetId: PreviewAnimationId = 'running';
   private readonly liveIndicator: HTMLElement;
   private readonly lightingSelect: HTMLSelectElement;
-  private readonly voxelSizeInput: HTMLInputElement;
-  private readonly voxelSizeValue: HTMLOutputElement;
   private readonly fixedCameraInput: HTMLInputElement;
-  private readonly cameraHint: HTMLElement;
   private readonly status: HTMLElement;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(38, 1, 0.1, 1200);
   private readonly renderer = new THREE.WebGLRenderer({
-    antialias: true,
+    antialias: false,
     powerPreference: 'high-performance',
   });
   private readonly controls: OrbitControls;
@@ -128,12 +129,12 @@ export class CharacterPreviewController {
     this.viewport = child(root, '#characterPreviewViewport');
     this.closeButton = child(root, '#closeCharacterPreviewBtn');
     this.animationSelect = child(root, '#characterPreviewAnimation');
+    this.animationDropdown = new SearchableAnimationDropdown(
+      child(root, '#characterPreviewAnimationDropdown'),
+    );
     this.liveIndicator = child(root, '#characterPreviewLiveIndicator');
     this.lightingSelect = child(root, '#characterPreviewLighting');
-    this.voxelSizeInput = child(root, '#characterPreviewVoxelSize');
-    this.voxelSizeValue = child(root, '#characterPreviewVoxelSizeValue');
     this.fixedCameraInput = child(root, '#characterPreviewFixedCamera');
-    this.cameraHint = child(root, '#characterPreviewCameraHint');
     this.status = child(root, '#characterPreviewStatus');
 
     this.scene.background = new THREE.Color(0x8fb9d0);
@@ -176,32 +177,29 @@ export class CharacterPreviewController {
   open(): boolean {
     const model = this.options.getModel();
     if (!model) {
-      this.options.notify('请先载入人物模型，再打开人物效果预览。', 'warning');
+      this.options.notify('无人物模型', 'warning');
       return false;
     }
     if (!model.skeleton.length) {
-      this.options.notify('当前模型没有骨骼，无法播放人物预览动画。', 'warning');
+      this.options.notify('无人物模型', 'warning');
       return false;
     }
 
     const rig = new VoxelAnimationRig(model);
     if (!rig.boundCount) {
-      this.options.notify('当前模型尚未绑定体素与骨骼，请先完成骨骼绑定。', 'warning');
+      this.options.notify('无人物模型', 'warning');
       return false;
     }
 
     this.model = model;
     this.rig = rig;
-    this.animationSelect.value = 'running';
-    this.animation = runningAnimation;
+    this.refreshAnimations();
     this.fixedCameraInput.checked = true;
     this.updateAnimationUi();
     this.elapsed = 0;
     this.characterGroup.rotation.set(0, 0, 0);
     this.rebuildWorld();
     this.options.root.classList.remove('hidden');
-    this.options.trigger.textContent = '关闭预览';
-    this.options.trigger.classList.add('preview-open');
     this.options.trigger.setAttribute('aria-expanded', 'true');
     this.lastFrame = performance.now();
     requestAnimationFrame(() => {
@@ -215,11 +213,48 @@ export class CharacterPreviewController {
   close(): void {
     if (!this.isOpen()) return;
     this.options.root.classList.add('hidden');
-    this.options.trigger.textContent = '预览人物模型效果';
-    this.options.trigger.classList.remove('preview-open');
+    this.animationDropdown.close(false);
     this.options.trigger.setAttribute('aria-expanded', 'false');
     this.releaseInput();
     this.options.trigger.focus({ preventScroll: true });
+  }
+
+  refreshAnimations(): void {
+    const loaded = this.options.getAnimations();
+    const previous = this.animation;
+    let selectedId: string;
+    if (loaded.length) {
+      const index = loaded.indexOf(this.animation);
+      selectedId = index >= 0 ? `file:${index}` : 'default';
+      if (index < 0) this.animation = runningAnimation;
+      populateAnimationOptions(
+        this.animationSelect,
+        [
+          { id: 'default', label: '默认' },
+          ...loaded.map((animation, index) => ({ id: `file:${index}`, label: animation.name })),
+        ],
+        '',
+        selectedId,
+      );
+    } else {
+      const preset = previewAnimationDefinitions.find(
+        ({ id }) => previewAnimations.get(id) === this.animation,
+      );
+      this.presetId = preset?.id ?? 'running';
+      this.animation = previewAnimations.get(this.presetId)!;
+      populateAnimationOptions(
+        this.animationSelect,
+        previewAnimationDefinitions.map(({ id, label }) => ({
+          id,
+          label,
+        })),
+        '',
+        this.presetId,
+      );
+    }
+    if (previous !== this.animation) this.elapsed = 0;
+    this.animationDropdown.refresh();
+    this.updateAnimationUi();
   }
 
   private bindEvents(): void {
@@ -234,13 +269,17 @@ export class CharacterPreviewController {
     });
     this.lightingSelect.addEventListener('change', () => this.applyLighting());
     this.animationSelect.addEventListener('change', () => {
-      const id = this.animationSelect.value as PreviewAnimationId;
-      this.animation = previewAnimations.get(id) ?? runningAnimation;
+      const id = this.animationSelect.value;
+      if (id.startsWith('file:')) {
+        this.animation = this.options.getAnimations()[Number(id.slice(5))] ?? runningAnimation;
+      } else if (id === 'default') {
+        this.animation = runningAnimation;
+      } else {
+        this.presetId = id as PreviewAnimationId;
+        this.animation = previewAnimations.get(this.presetId) ?? runningAnimation;
+      }
       this.elapsed = 0;
       this.updateAnimationUi();
-    });
-    this.voxelSizeInput.addEventListener('input', () => {
-      this.voxelSizeValue.value = `${Number(this.voxelSizeInput.value).toFixed(2)}×`;
       this.applyPose();
     });
     this.fixedCameraInput.addEventListener('change', () => this.applyCameraMode());
@@ -286,7 +325,8 @@ export class CharacterPreviewController {
         if (event.key === 'Escape') {
           event.preventDefault();
           event.stopImmediatePropagation();
-          this.close();
+          if (this.animationDropdown.isOpen()) this.animationDropdown.close();
+          else this.close();
           return;
         }
         if (event.key === 'Shift') this.shiftHeld = true;
@@ -399,8 +439,7 @@ export class CharacterPreviewController {
     if (!this.model || !this.voxelMesh || !this.rig) return;
     const fallback = this.model.skeleton.map((particle) => ({ x: particle.x, y: particle.y, z: particle.z }));
     const positions = sampleAnimationPositions(this.animation, this.elapsed, fallback);
-    const size = Number(this.voxelSizeInput.value);
-    this.poseScale.setScalar(size);
+    this.poseScale.setScalar(1);
     this.model.voxels.forEach((voxel, index) => {
       if (this.rig!.getPose(index, positions, this.posePosition, this.poseRotation)) {
         this.poseMatrix.compose(this.posePosition, this.poseRotation, this.poseScale);
@@ -425,18 +464,19 @@ export class CharacterPreviewController {
   }
 
   private updateAnimationUi(): void {
-    const definition =
-      previewAnimationDefinitions.find(({ id }) => id === this.animationSelect.value) ??
-      previewAnimationDefinitions[1];
+    const label = this.animation.name;
     const looping = this.animation.frames.length > 1 && this.animation.loop;
-    const title = definition.label.toUpperCase();
-    this.liveIndicator.lastChild!.textContent = looping ? `${title} LOOP` : title;
+    const title = label;
+    this.liveIndicator.replaceChildren(
+      document.createElement('i'),
+      document.createTextNode(looping ? `${title} LOOP` : title),
+    );
     if (!this.model || !this.rig) return;
     const animationParticles = this.animation.frames[0]?.positions.length ?? 0;
     this.status.textContent =
       this.model.skeleton.length === animationParticles
         ? ''
-        : `模型有 ${this.model.skeleton.length} 个骨骼点；${definition.label} 预设提供 ${animationParticles} 个。`;
+        : `模型有 ${this.model.skeleton.length} 个骨骼点；${label} 动画包含 ${animationParticles} 个。`;
   }
 
   private applyCameraMode(): void {
@@ -455,9 +495,6 @@ export class CharacterPreviewController {
       this.camera.updateProjectionMatrix();
       this.camera.lookAt(this.fixedTarget);
     }
-    this.cameraHint.textContent = fixed
-      ? '固定镜头 · 左键拖动旋转人物模型'
-      : 'WASD 移动 · Shift 加速 · 左键转动视角 · 滚轮缩放';
     this.viewport.dataset.fixedCamera = String(fixed);
     this.viewport.focus({ preventScroll: true });
   }
@@ -500,7 +537,7 @@ export class CharacterPreviewController {
     const width = this.viewport.clientWidth;
     const height = this.viewport.clientHeight;
     if (!width || !height) return;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(1);
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -511,7 +548,7 @@ export class CharacterPreviewController {
     const delta = Math.min(0.1, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
     if (!this.isOpen() || !this.model) return;
-    this.elapsed = (this.elapsed + delta * this.animation.speed) % Math.max(this.animation.end, 0.001);
+    this.elapsed = advanceAnimation(this.animation, this.elapsed, delta).elapsed;
     this.moveCamera(delta);
     this.controls.update();
     this.applyPose();

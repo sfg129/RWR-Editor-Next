@@ -25,7 +25,7 @@
 .panel,
 .model-panel,
 .animation-workspace,
-.animation-workspace > summary,
+.animation-workspace-heading,
 .about-card {
   background-image: none;
 }
@@ -98,7 +98,7 @@
 
 .model-panel,
 .tool-panel,
-.animation-workspace[open] {
+.animation-workspace.workspace-expanded {
   border-left-color: var(--accent);
 }
 
@@ -113,6 +113,7 @@
 .settings-nav button,
 input[type='number'],
 input[type='text'],
+input[type='search'],
 select,
 kbd,
 .file-state,
@@ -137,6 +138,7 @@ kbd,
 .tool-tabs button,
 input[type='number'],
 input[type='text'],
+input[type='search'],
 select,
 .move-pad button,
 .y-move button,
@@ -230,7 +232,7 @@ kbd {
 :root[data-theme='light'] .panel,
 :root[data-theme='light'] .model-panel,
 :root[data-theme='light'] .animation-workspace,
-:root[data-theme='light'] .animation-workspace > summary,
+:root[data-theme='light'] .animation-workspace-heading,
 :root[data-theme='light'] .about-card {
   background-image: none;
   box-shadow: none;

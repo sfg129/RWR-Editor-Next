@@ -1,4 +1,4 @@
-export type ToolId = 'select' | 'sculpt' | 'paint' | 'picker' | 'move' | 'marquee';
+export type ToolId = 'select' | 'sculpt' | 'paint' | 'marquee';
 
 export type ShortcutAction =
   | 'newModel'
@@ -11,8 +11,6 @@ export type ShortcutAction =
   | 'toolSelect'
   | 'toolSculpt'
   | 'toolPaint'
-  | 'toolPicker'
-  | 'toolMove'
   | 'marqueeThrough'
   | 'marqueeVisible'
   | 'cameraForward'
@@ -84,7 +82,7 @@ export interface EditorSettings {
   pixelRatio: number;
   showGrid: boolean;
   showSkeleton: boolean;
-  lightingPreset: 'soft' | 'standard' | 'bright' | 'color';
+  lightingPreset: 'standard' | 'color';
   cameraSpeed: number;
   voxelDisplayMode: 'floating' | 'grid';
   autosave: boolean;
@@ -93,7 +91,7 @@ export interface EditorSettings {
   accent: string;
   brightness: number;
   uiScale: number;
-  fontSize: 16 | 18 | 20;
+  fontSize: number;
   shortcuts: ShortcutMap;
 }
 
