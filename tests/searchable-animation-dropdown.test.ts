@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { populateAnimationOptions } from '../src/editor/animation-options';
 import { SearchableAnimationDropdown } from '../src/editor/searchable-animation-dropdown';
+import { setLanguage } from '../src/i18n/runtime';
 
 function fixture() {
   const root = document.createElement('div');
@@ -62,5 +63,22 @@ describe('searchable animation popup', () => {
     dropdown.open();
     expect(dropdown.isOpen()).toBe(false);
     expect(root.querySelector<HTMLButtonElement>('[data-animation-trigger]')!.disabled).toBe(true);
+  });
+
+  it('copies original option labels so switching languages does not retain an old translation', async () => {
+    document.body.replaceChildren();
+    const { root, select, dropdown } = fixture();
+    populateAnimationOptions(select, [{ id: 'default', label: '默认' }], '', 'default');
+    setLanguage('ja');
+    dropdown.refresh();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.querySelector('[data-animation-label]')?.textContent).toBe('デフォルト');
+    setLanguage('zh-TW');
+    expect(root.querySelector('[data-animation-label]')?.textContent).toBe('預設');
+    dropdown.open();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    setLanguage('zh-CN');
+    expect(root.querySelector('[data-animation-label]')?.textContent).toBe('默认');
+    expect(document.querySelector('[role="option"]')?.textContent).toBe('默认');
   });
 });

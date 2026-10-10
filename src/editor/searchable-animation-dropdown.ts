@@ -1,4 +1,5 @@
 import { filterAnimationOptions, type AnimationOption } from './animation-options';
+import { sourceTextContent } from '../i18n/runtime';
 
 export class SearchableAnimationDropdown {
   private readonly select: HTMLSelectElement;
@@ -75,11 +76,15 @@ export class SearchableAnimationDropdown {
   refresh(): void {
     this.options = Array.from(this.select.options)
       .filter(({ value }) => value !== '')
-      .map(({ value, textContent }) => ({ id: value, label: textContent ?? '' }));
+      .map((option) => ({ id: option.value, label: sourceTextContent(option) }));
     this.trigger.disabled = this.select.disabled || !this.options.length;
     this.label.textContent =
       this.options.find(({ id }) => id === this.select.value)?.label ??
-      (this.options.length ? '选择动画' : (this.select.options[0]?.textContent ?? '未载入动画文件'));
+      (this.options.length
+        ? '选择动画'
+        : this.select.options[0]
+          ? sourceTextContent(this.select.options[0])
+          : '未载入动画文件');
     if (this.trigger.disabled) this.close(false);
     if (this.isOpen()) this.renderMatches();
   }

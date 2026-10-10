@@ -53,6 +53,7 @@ describe('Vue editor DOM contract', () => {
     expect(rail.slice(0, rail.indexOf('class="marquee-mode-menu"'))).not.toContain('<kbd');
     expect(componentSource).not.toContain('id="activeToolLabel"');
     expect(componentSource).not.toContain('id="emptyState"');
+    expect(componentSource).not.toContain('class="brand"');
     expect(componentSource).not.toContain('id="characterPreviewAnimationSource"');
     expect(componentSource).not.toContain('id="characterPreviewVoxelSize"');
     expect(componentSource).not.toContain('体素跟随骨骼');

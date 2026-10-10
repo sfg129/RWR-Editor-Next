@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { isTauriRuntime, openExternalUrl } from '../platform/external-links';
+import LanguageSelect from './LanguageSelect.vue';
 
 const repositoryUrl = 'https://github.com/sfg129/RWR-Editor-Next';
 function handleRepositoryClick(event: MouseEvent): void {
@@ -50,13 +51,7 @@ const shortcuts = [
         </nav>
         <div class="settings-content">
           <section class="settings-page active" data-page="settings">
-            <div class="setting">
-              <strong>界面语言</strong
-              ><select id="languageSetting" aria-label="界面语言">
-                <option value="zh-CN">简体中文</option>
-                <option value="en">English</option>
-              </select>
-            </div>
+            <div class="setting"><strong>界面语言</strong><LanguageSelect id="languageSetting" /></div>
             <div class="setting">
               <strong>主题</strong
               ><select id="themeSetting" aria-label="主题">
@@ -96,7 +91,7 @@ const shortcuts = [
               <div class="brand-mark large"><span /><span /><span /></div>
               <div>
                 <strong>RWR 体素编辑器 Next</strong>
-                <p>版本 0.8</p>
+                <p>版本 0.8.1</p>
               </div>
             </div>
             <a

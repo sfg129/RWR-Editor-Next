@@ -1,11 +1,12 @@
 import type { EditorSettings } from '../core/types';
+import { isAppLanguage } from '../i18n/languages';
 
 const STORAGE_KEY = 'rwr-editor-settings-v1';
 
 // These rendering/behavior settings are no longer user-configurable.
 const fixedSettings = {
   performancePreset: 'balanced',
-  antialias: false,
+  antialias: true,
   shadows: true,
   pixelRatio: 1,
   showGrid: true,
@@ -21,7 +22,7 @@ export const defaultSettings: EditorSettings = {
   language: 'zh-CN',
   theme: 'dark',
   performancePreset: 'balanced',
-  antialias: false,
+  antialias: true,
   shadows: true,
   pixelRatio: 1,
   showGrid: true,
@@ -71,7 +72,7 @@ export function loadSettings(): EditorSettings {
       ...defaultSettings,
       ...compatibleStored,
       ...fixedSettings,
-      language: stored.language === 'en' ? 'en' : 'zh-CN',
+      language: isAppLanguage(stored.language) ? stored.language : 'zh-CN',
       theme: stored.theme === 'light' ? 'light' : 'dark',
       lightingPreset: stored.lightingPreset === 'color' ? 'color' : 'standard',
       fontSize:

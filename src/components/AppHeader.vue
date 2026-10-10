@@ -1,9 +1,5 @@
 <template>
   <header class="topbar">
-    <div class="brand">
-      <div class="brand-mark" aria-hidden="true"><span /><span /><span /></div>
-      <div><strong>RWR 体素编辑器</strong><small>NEXT</small></div>
-    </div>
     <nav class="file-actions" aria-label="文件操作">
       <div class="file-menu-wrap">
         <button id="fileMenuBtn" class="button" aria-haspopup="menu" aria-expanded="false">

@@ -9,10 +9,11 @@ import { advanceAnimation, animationDuration, resumeAnimationAt } from '../core/
 import { populateAnimationOptions } from './animation-options';
 import { SearchableAnimationDropdown } from './searchable-animation-dropdown';
 import { AnimationWorkbench } from './animation-workbench';
+import { applyViewportTheme } from './viewport-theme';
 import { cameraRelativeMotion } from '../core/camera/camera-motion';
 import { hsvToRgb, hueFromPoint, rgbToHsv, saturationValueFromPoint } from '../core/color/color-picker';
 import { RwrModel, parseAnimations, serializeAnimations } from '../core/model/rwr-model';
-import { setLanguage } from '../i18n/runtime';
+import { localized, setLanguage } from '../i18n/runtime';
 import type {
   EditorSettings,
   EditorSnapshot,
@@ -26,6 +27,7 @@ import type {
 import { desktopBridge } from '../platform/desktop-api';
 import { CharacterPreviewController } from './character-preview';
 import { FileDialogGate } from './file-dialog-gate';
+import { isAppLanguage, languageChangeEvent } from '../i18n/languages';
 import { isTextEntryTarget, releasePressedActions } from './focus-policy';
 import { normalizeScreenRect, rectangleOverlapRatio, type ScreenRect } from './marquee-selection';
 import { exceedsPointerDragThreshold } from './pointer-gesture';
@@ -1529,7 +1531,7 @@ async function openFile(kind: 'model' | 'animation'): Promise<void> {
   if (
     kind === 'animation' &&
     animationDirty &&
-    !window.confirm('当前动画有未导出修改。确定放弃并载入其他动画文件吗？')
+    !window.confirm(localized('当前动画有未导出修改。确定放弃并载入其他动画文件吗？'))
   )
     return;
   if (!fileDialogGate.tryOpen()) return;
@@ -1706,7 +1708,7 @@ function duplicateAnimation(): void {
 
 function deleteAnimation(): void {
   if (!activeAnimation) return;
-  if (!window.confirm(`确定删除动画“${activeAnimation.name}”吗？`)) return;
+  if (!window.confirm(localized(`确定删除动画“${activeAnimation.name}”吗？`))) return;
   const index = animations.indexOf(activeAnimation);
   if (index >= 0) animations.splice(index, 1);
   activeAnimation = animations[Math.min(index, animations.length - 1)] ?? null;
@@ -1910,6 +1912,7 @@ function updateShortcutLabels(): void {
 function applySettings(): void {
   saveSettings(settings);
   applySettingsToDocument(settings);
+  applyViewportTheme(scene, grid, settings.theme);
   setLanguage(settings.language);
   const lighting = lightingPresets[settings.lightingPreset];
   ambient.intensity = lighting.ambient;
@@ -2491,6 +2494,7 @@ function runShortcutAction(action: ShortcutAction): void {
 window.addEventListener(
   'keydown',
   (event) => {
+    if (document.getElementById('languageSelectionModal')) return;
     if (fileDialogGate.isOpen()) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -2537,6 +2541,13 @@ window.addEventListener(
   { capture: true },
 );
 window.addEventListener('blur', releaseCameraInput);
+window.addEventListener(languageChangeEvent, (event) => {
+  const language = (event as CustomEvent<unknown>).detail;
+  if (isAppLanguage(language)) {
+    settings.language = language;
+    applySettings();
+  }
+});
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) releaseCameraInput();
 });

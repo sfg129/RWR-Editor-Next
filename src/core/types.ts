@@ -74,7 +74,7 @@ export interface RwrAnimation {
 }
 
 export interface EditorSettings {
-  language: 'zh-CN' | 'en';
+  language: import('../i18n/languages').AppLanguage;
   theme: 'dark' | 'light';
   performancePreset: 'quality' | 'balanced' | 'performance';
   antialias: boolean;

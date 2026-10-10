@@ -13,6 +13,7 @@ describe('runtime localization', () => {
     );
     expect(translate('拖放 XML 文件以打开')).toBe('Drop an XML file to open it');
     expect(translate('版本 0.8')).toBe('Version 0.8');
+    expect(translate('版本 0.8.1')).toBe('Version 0.8.1');
     expect(translate('当前模型有未保存修改。')).toBe('The current model has unsaved changes.');
     expect(translate('新模型已创建。')).toBe('Model created.');
     expect(translate('动画已创建。')).toBe('Animation created.');
@@ -40,5 +41,27 @@ describe('runtime localization', () => {
     setLanguage('zh-CN');
     expect(document.querySelector('button')?.textContent).toBe('打开模型');
     expect(document.querySelector('#status')?.textContent).toBe('已选择 4 个体素');
+  });
+
+  it('keeps original sources when Traditional Chinese and Japanese contain Han characters', async () => {
+    document.body.innerHTML =
+      '<button title="设置">打开模型</button><p>已选择 8 个体素</p>' +
+      '<div data-no-localize>简体中文 繁體中文 日本語</div>';
+    setLanguage('zh-TW');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.querySelector('button')?.textContent).toBe('開啟模型');
+    expect(document.querySelector('button')?.title).toBe('設定');
+    setLanguage('ja');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.querySelector('button')?.textContent).toBe('モデルを開く');
+    document.querySelector('p')!.textContent = '已选择 9 个体素';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.querySelector('p')?.textContent).toBe('9 個のボクセルを選択');
+    setLanguage('fr');
+    expect(document.querySelector('button')?.textContent).toBe('Ouvrir un modèle');
+    setLanguage('zh-CN');
+    expect(document.querySelector('button')?.textContent).toBe('打开模型');
+    expect(document.querySelector('p')?.textContent).toBe('已选择 9 个体素');
+    expect(document.querySelector('[data-no-localize]')?.textContent).toBe('简体中文 繁體中文 日本語');
   });
 });

@@ -83,7 +83,7 @@ export class CharacterPreviewController {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(38, 1, 0.1, 1200);
   private readonly renderer = new THREE.WebGLRenderer({
-    antialias: false,
+    antialias: true,
     powerPreference: 'high-performance',
   });
   private readonly controls: OrbitControls;

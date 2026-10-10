@@ -10,7 +10,7 @@ use tauri::{AppHandle, State};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 
 const APP_NAME: &str = "RWR 体素编辑器 Next";
-const APP_VERSION: &str = "0.7.1";
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 struct EditorFileState {
     writable_xml_paths: Mutex<HashSet<PathBuf>>,
@@ -257,6 +257,31 @@ fn app_info() -> String {
     serde_json::json!({ "name": APP_NAME, "version": APP_VERSION }).to_string()
 }
 
+#[tauri::command]
+fn system_locale() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetUserDefaultLocaleName(buffer: *mut u16, length: i32) -> i32;
+        }
+        let mut buffer = [0u16; 85];
+        // Windows regional format, rather than the UI/browser display language.
+        let length = unsafe { GetUserDefaultLocaleName(buffer.as_mut_ptr(), buffer.len() as i32) };
+        if length > 1 {
+            return String::from_utf16_lossy(&buffer[..length as usize - 1]);
+        }
+    }
+    std::env::var("LC_ALL")
+        .or_else(|_| std::env::var("LC_MESSAGES"))
+        .or_else(|_| std::env::var("LANG"))
+        .unwrap_or_default()
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .replace('_', "-")
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -269,7 +294,8 @@ pub fn run() {
             take_startup_text_file,
             save_text_file,
             overwrite_text_file,
-            app_info
+            app_info,
+            system_locale
         ])
         .run(tauri::generate_context!())
         .expect("failed to run RWR Editor");
@@ -278,6 +304,16 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn reads_windows_regional_locale() {
+        let locale = system_locale();
+        assert!(!locale.is_empty());
+        assert!(locale
+            .chars()
+            .all(|value| value.is_ascii_alphanumeric() || value == '-'));
+    }
 
     #[test]
     fn finds_the_first_existing_xml_startup_argument() {

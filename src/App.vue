@@ -7,6 +7,7 @@ import EditorViewport from './components/EditorViewport.vue';
 import InspectorPanel from './components/InspectorPanel.vue';
 import SettingsDialog from './components/SettingsDialog.vue';
 import ToolRail from './components/ToolRail.vue';
+import LanguageSelection from './components/LanguageSelection.vue';
 </script>
 
 <template>
@@ -26,6 +27,7 @@ import ToolRail from './components/ToolRail.vue';
     <SettingsDialog />
     <DecisionDialogs />
     <CharacterPreview />
+    <LanguageSelection />
 
     <div
       id="fileDialogInteractionGuard"

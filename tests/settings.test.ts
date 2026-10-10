@@ -8,6 +8,7 @@ describe('editor settings', () => {
     const settings = loadSettings();
     expect(settings.fontSize).toBe(16);
     expect(settings.language).toBe('zh-CN');
+    expect(settings.antialias).toBe(true);
     expect('rotationMode' in settings).toBe(false);
     expect('marqueeCompletionAction' in settings).toBe(false);
     expect(settings.voxelDisplayMode).toBe('grid');
@@ -36,7 +37,7 @@ describe('editor settings', () => {
       'rwr-editor-settings-v1',
       JSON.stringify({
         performancePreset: 'quality',
-        antialias: true,
+        antialias: false,
         shadows: false,
         pixelRatio: 2,
         showGrid: false,
@@ -55,7 +56,7 @@ describe('editor settings', () => {
     );
     expect(loadSettings()).toMatchObject({
       performancePreset: 'balanced',
-      antialias: false,
+      antialias: true,
       shadows: true,
       pixelRatio: 1,
       showGrid: true,
