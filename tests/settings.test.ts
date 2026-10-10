@@ -13,7 +13,7 @@ describe('editor settings', () => {
     expect('marqueeCompletionAction' in settings).toBe(false);
     expect(settings.voxelDisplayMode).toBe('grid');
     expect(settings.shortcuts.marqueeThrough).toBe('Ctrl+1');
-    expect(settings.shortcuts.marqueeVisible).toBe('Ctrl+2');
+    expect('marqueeVisible' in settings.shortcuts).toBe(false);
   });
 
   it('adds new defaults when loading settings saved by an older version', () => {

@@ -3,6 +3,23 @@ import type { AppLanguage } from './languages';
 // Source | Traditional Chinese | Spanish | Portuguese | German | French | Russian | Japanese.
 // Keep placeholders intact: filenames, animation names and numeric values are not translated.
 const rows = `
+全部关闭|全部關閉|Cerrar todas|Fechar todas|Alle schließen|Tout fermer|Закрыть все|すべて閉じる
+关闭其它|關閉其他|Cerrar las demás|Fechar outras|Andere schließen|Fermer les autres|Закрыть остальные|他を閉じる
+关闭右侧标签页|關閉右側分頁|Cerrar pestañas a la derecha|Fechar abas à direita|Rechte Tabs schließen|Fermer les onglets à droite|Закрыть вкладки справа|右側のタブを閉じる
+关闭已保存|關閉已儲存|Cerrar las guardadas|Fechar salvas|Gespeicherte schließen|Fermer les enregistrés|Закрыть сохранённые|保存済みを閉じる
+复制路径|複製路徑|Copiar ruta|Copiar caminho|Pfad kopieren|Copier le chemin|Копировать путь|パスをコピー
+复制相对路径|複製相對路徑|Copiar ruta relativa|Copiar caminho relativo|Relativen Pfad kopieren|Copier le chemin relatif|Копировать относительный путь|相対パスをコピー
+在资源管理器中打开|在檔案總管中開啟|Abrir en el explorador|Abrir no explorador|Im Dateimanager öffnen|Ouvrir dans l’explorateur|Открыть в проводнике|ファイルマネージャーで開く
+保持打开|保持開啟|Mantener abierta|Manter aberta|Offen halten|Garder ouvert|Оставить открытой|開いたままにする
+固定|釘選|Fijar|Fixar|Anheften|Épingler|Закрепить|ピン留め
+取消固定|取消釘選|Desfijar|Desafixar|Lösen|Désépingler|Открепить|ピン留めを解除
+下一个标签页|下一個分頁|Pestaña siguiente|Próxima aba|Nächster Tab|Onglet suivant|Следующая вкладка|次のタブ
+上一个标签页|上一個分頁|Pestaña anterior|Aba anterior|Vorheriger Tab|Onglet précédent|Предыдущая вкладка|前のタブ
+模型标签页|模型分頁|Pestañas de modelos|Abas de modelos|Modell-Tabs|Onglets des modèles|Вкладки моделей|モデルタブ
+工作区|工作區|Espacio de trabajo|Espaço de trabalho|Arbeitsbereich|Espace de travail|Рабочая область|ワークスペース
+打开文件夹|開啟資料夾|Abrir carpeta|Abrir pasta|Ordner öffnen|Ouvrir un dossier|Открыть папку|フォルダーを開く
+工作区宽度|工作區寬度|Ancho del espacio de trabajo|Largura do espaço de trabalho|Breite des Arbeitsbereichs|Largeur de l’espace de travail|Ширина рабочей области|ワークスペースの幅
+是否保存对此文件的更改？|是否儲存對此檔案的變更？|¿Guardar los cambios en este archivo?|Salvar alterações neste arquivo?|Änderungen an dieser Datei speichern?|Enregistrer les modifications de ce fichier ?|Сохранить изменения в этом файле?|このファイルへの変更を保存しますか？
 RWR 体素编辑器|RWR 體素編輯器|Editor de vóxeles RWR|Editor de voxels RWR|RWR-Voxel-Editor|Éditeur de voxels RWR|Редактор вокселей RWR|RWR ボクセルエディター
 RWR 体素编辑器 Next|RWR 體素編輯器 Next|Editor de vóxeles RWR Next|Editor de voxels RWR Next|RWR-Voxel-Editor Next|Éditeur de voxels RWR Next|Редактор вокселей RWR Next|RWR ボクセルエディター Next
 文件操作|檔案操作|Acciones de archivo|Ações de arquivo|Dateiaktionen|Actions sur les fichiers|Действия с файлами|ファイル操作

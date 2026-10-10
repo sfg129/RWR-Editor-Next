@@ -49,11 +49,12 @@ export const defaultSettings: EditorSettings = {
     toolSculpt: '2',
     toolPaint: '3',
     marqueeThrough: 'Ctrl+1',
-    marqueeVisible: 'Ctrl+2',
     cameraForward: 'W',
     cameraBack: 'S',
     cameraLeft: 'A',
     cameraRight: 'D',
+    closeTab: 'Ctrl+F4', nextTab: 'Ctrl+Tab', previousTab: 'Ctrl+Shift+Tab',
+    keepOpen: 'Ctrl+K Enter', pinTab: 'Ctrl+K Shift+Enter', closeSaved: 'Ctrl+K U', closeAll: 'Ctrl+K W',
   },
 };
 

@@ -4,6 +4,23 @@ import { dynamicTranslations } from './dynamic-translations';
 export type { AppLanguage } from './languages';
 
 const englishMessages: Record<string, string> = {
+  "全部关闭": "Close all",
+  "关闭其它": "Close others",
+  "关闭右侧标签页": "Close tabs to the right",
+  "关闭已保存": "Close saved",
+  "复制路径": "Copy path",
+  "复制相对路径": "Copy relative path",
+  "在资源管理器中打开": "Open in file manager",
+  "保持打开": "Keep open",
+  "固定": "Pin",
+  "取消固定": "Unpin",
+  "下一个标签页": "Next tab",
+  "上一个标签页": "Previous tab",
+  "模型标签页": "Model tabs",
+  "工作区": "Workspace",
+  "打开文件夹": "Open folder",
+  "工作区宽度": "Workspace width",
+  "是否保存对此文件的更改？": "Save changes to this file?",
   'RWR 体素编辑器': 'RWR Voxel Editor',
   'RWR 体素编辑器 Next': 'RWR Voxel Editor Next',
   文件操作: 'File actions',

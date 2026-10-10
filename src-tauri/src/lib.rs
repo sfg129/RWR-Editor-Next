@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Mutex,
 };
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, Manager};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 
 const APP_NAME: &str = "RWR 体素编辑器 Next";
@@ -252,6 +252,81 @@ fn overwrite_text_file(
     })
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModelWorkspaceEntry { name: String, path: String, is_directory: bool, is_model: bool, children: Vec<ModelWorkspaceEntry> }
+#[derive(Serialize)]
+struct ModelWorkspace { root: String, entries: Vec<ModelWorkspaceEntry> }
+
+// Studio's immediate-child listing: lazy recursion in the UI, directories first.
+fn model_workspace_entries(path: &Path) -> Result<Vec<ModelWorkspaceEntry>, String> {
+    let mut paths = fs::read_dir(path).map_err(|e| e.to_string())?.filter_map(Result::ok).map(|entry| entry.path()).collect::<Vec<_>>();
+    paths.sort_by(|a,b| b.is_dir().cmp(&a.is_dir()).then_with(|| a.file_name().cmp(&b.file_name())));
+    let mut result = Vec::new();
+    for child in paths {
+        let Ok(metadata) = fs::symlink_metadata(&child) else { continue };
+        if metadata.file_type().is_symlink() { continue }
+        result.push(ModelWorkspaceEntry { name: child.file_name().unwrap_or_default().to_string_lossy().into_owned(), path: display_path(&child), is_directory: metadata.is_dir(), is_model: metadata.is_file() && child.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("xml")), children: Vec::new() });
+    }
+    Ok(result)
+}
+fn model_workspace(path: PathBuf) -> Result<ModelWorkspace, String> {
+    let root = path.canonicalize().map_err(|e| e.to_string())?;
+    if !root.is_dir() { return Err("Not a directory".into()) }
+    Ok(ModelWorkspace { entries: model_workspace_entries(&root)?, root: display_path(&root) })
+}
+#[tauri::command]
+fn scan_model_workspace(path: String) -> Result<ModelWorkspace, String> { model_workspace(PathBuf::from(path)) }
+#[tauri::command]
+fn list_model_workspace_dir(path: String) -> Result<Vec<ModelWorkspaceEntry>, String> {
+    let root = PathBuf::from(path).canonicalize().map_err(|e| e.to_string())?;
+    model_workspace_entries(&root)
+}
+#[tauri::command]
+async fn choose_model_workspace(app: AppHandle) -> Result<Option<ModelWorkspace>, String> {
+    let (sender, mut receiver) = tauri::async_runtime::channel(1);
+    app.dialog().file().pick_folder(move |selected| { let _ = sender.try_send(selected); });
+    let selected = receiver.recv().await.ok_or_else(|| "Folder chooser closed".to_string())?;
+    selected.map(|file| file.as_path().ok_or_else(|| "Not a local folder".to_string()).and_then(|path| model_workspace(path.to_path_buf()))).transpose()
+}
+fn write_editor_session(path: &Path, text: &str) -> Result<(), String> {
+    use std::io::Write;
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    if value["version"] != 1 || !value["tabs"].is_array() || !value["activeId"].is_string() { return Err("Invalid editor session".into()) }
+    let parent = path.parent().ok_or_else(|| "Invalid session directory".to_string())?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let temp = parent.join(format!(".editor-session.{}.{}.tmp", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()));
+    let result = (|| {
+        let mut file = fs::File::create(&temp).map_err(|e| e.to_string())?;
+        file.write_all(text.as_bytes()).map_err(|e| e.to_string())?; file.sync_all().map_err(|e| e.to_string())?; drop(file);
+        fs::rename(&temp, path).map_err(|e| e.to_string())
+    })();
+    if result.is_err() { let _ = fs::remove_file(&temp); }
+    result
+}
+#[tauri::command]
+fn load_editor_session(app: AppHandle) -> Result<Option<String>, String> {
+    let path = app.path().app_config_dir().map_err(|e| e.to_string())?.join("editor-session.json");
+    if !path.exists() { return Ok(None) }
+    fs::read_to_string(path).map(Some).map_err(|e| e.to_string())
+}
+#[tauri::command]
+fn save_editor_session(app: AppHandle, text: String) -> Result<(), String> {
+    let path = app.path().app_config_dir().map_err(|e| e.to_string())?.join("editor-session.json");
+    write_editor_session(&path, &text)
+}
+#[tauri::command]
+fn reveal_model_file(path: String) -> Result<(), String> {
+    let file = PathBuf::from(path).canonicalize().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("explorer.exe").arg(format!("/select,{}", display_path(&file))).spawn();
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open").arg("-R").arg(&file).spawn();
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let result = std::process::Command::new("xdg-open").arg(file.parent().unwrap_or(&file)).spawn();
+    result.map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn app_info() -> String {
     serde_json::json!({ "name": APP_NAME, "version": APP_VERSION }).to_string()
@@ -294,6 +369,8 @@ pub fn run() {
             take_startup_text_file,
             save_text_file,
             overwrite_text_file,
+            choose_model_workspace, scan_model_workspace, list_model_workspace_dir,
+            load_editor_session, save_editor_session, reveal_model_file,
             app_info,
             system_locale
         ])
@@ -304,6 +381,30 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn session_replaces_atomically_and_preserves_unsaved_payload() {
+        let directory = std::env::temp_dir().join(format!("rwr-editor-session-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("editor-session.json");
+        let first = r#"{"version":1,"activeId":"","tabs":[]}"#;
+        let second = r#"{"version":1,"activeId":"one","tabs":[{"dirty":true,"text":"edited"}]}"#;
+        write_editor_session(&path, first).unwrap(); write_editor_session(&path, second).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), second);
+        assert!(write_editor_session(&path, "{}").is_err());
+        assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+        fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn workspace_lists_only_immediate_children() {
+        let directory = std::env::temp_dir().join(format!("rwr-editor-workspace-{}", std::process::id()));
+        fs::create_dir_all(directory.join("sub")).unwrap();
+        fs::write(directory.join("tank.xml"), "<model/>").unwrap();
+        fs::write(directory.join("sub/deeper.xml"), "<model/>").unwrap();
+        let entries = model_workspace_entries(&directory).unwrap();
+        assert_eq!(entries.len(), 2); assert!(entries[0].is_directory);
+        assert!(entries[1].is_model); assert!(entries.iter().all(|entry| entry.children.is_empty()));
+        fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     #[cfg(target_os = "windows")]

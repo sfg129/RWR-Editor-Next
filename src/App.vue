@@ -6,8 +6,9 @@ import DecisionDialogs from './components/DecisionDialogs.vue';
 import EditorViewport from './components/EditorViewport.vue';
 import InspectorPanel from './components/InspectorPanel.vue';
 import SettingsDialog from './components/SettingsDialog.vue';
-import ToolRail from './components/ToolRail.vue';
 import LanguageSelection from './components/LanguageSelection.vue';
+import DocumentTabs from './components/DocumentTabs.vue';
+import ModelWorkspace from './components/ModelWorkspace.vue';
 </script>
 
 <template>
@@ -15,7 +16,8 @@ import LanguageSelection from './components/LanguageSelection.vue';
     <AppHeader />
 
     <main class="workspace">
-      <ToolRail />
+      <DocumentTabs />
+      <ModelWorkspace />
       <EditorViewport />
       <InspectorPanel>
         <template #animation>

@@ -170,6 +170,7 @@ export class RwrModel {
 
   restore(snapshot: EditorSnapshot): void {
     this.voxels = snapshot.voxels.map(cloneVoxel);
+    for (const voxel of snapshot.voxels) this.nextId = Math.max(this.nextId, Number(/^v(\d+)$/.exec(voxel.id)?.[1] ?? 0) + 1);
     this.bindings = snapshot.bindings.map((group) => ({
       constraintIndex: group.constraintIndex,
       voxelIds: new Set(group.voxelIds),

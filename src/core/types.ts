@@ -1,4 +1,4 @@
-export type ToolId = 'select' | 'sculpt' | 'paint' | 'marquee';
+export type ToolId = 'select' | 'sculpt' | 'paint';
 
 export type ShortcutAction =
   | 'newModel'
@@ -12,11 +12,11 @@ export type ShortcutAction =
   | 'toolSculpt'
   | 'toolPaint'
   | 'marqueeThrough'
-  | 'marqueeVisible'
   | 'cameraForward'
   | 'cameraBack'
   | 'cameraLeft'
-  | 'cameraRight';
+  | 'cameraRight'
+  | 'closeTab' | 'nextTab' | 'previousTab' | 'keepOpen' | 'pinTab' | 'closeSaved' | 'closeAll';
 
 export type ShortcutMap = Record<ShortcutAction, string>;
 

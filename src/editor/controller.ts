@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { ModelTabsController, type ModelTabState } from './model-tabs-controller';
+import { documentWorkspace } from './document-workspace';
+import { orderedShortcuts, shortcutEntries, matchShortcut } from '../core/editor/shortcuts';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -177,6 +181,10 @@ let autosaveTimer = 0;
 let pickedColor = { r: 115 / 255, g: 140 / 255, b: 69 / 255 };
 let colorPickerHsv = rgbToHsv(pickedColor);
 let overwriteResolver: ((confirmed: boolean) => void) | null = null;
+let closeTabResolver: ((decision: 'save' | 'discard' | 'cancel') => void) | null = null;
+let modelTabs: ModelTabsController | undefined;
+let modelOpenToken = 0;
+let modelSaving = false;
 const pressedCameraActions = new Set<ShortcutAction>();
 
 const scene = new THREE.Scene();
@@ -257,7 +265,6 @@ let cameraLookActive = false;
 let cameraLookPointerId: number | null = null;
 let cameraLookLast = { x: 0, y: 0 };
 let shiftHeld = false;
-let marqueeMode: 'visible' | 'through' = 'through';
 let marqueePointerId: number | null = null;
 let marqueeStart = { x: 0, y: 0 };
 
@@ -303,7 +310,6 @@ const toolCopy: Record<ToolId, { label: string }> = {
   select: { label: '选择' },
   sculpt: { label: '修改' },
   paint: { label: '绘色' },
-  marquee: { label: '框选' },
 };
 
 function resizeRenderer(): void {
@@ -679,11 +685,12 @@ function updateStats(): void {
   copyModelBlockBtn.disabled = !model?.voxels.length;
   pasteVoxelBlockBtn.disabled = !model || !selectedVoxelBlock();
   saveAsBtn.disabled = !model;
-  overwriteBtn.disabled = !model || !currentFilePath;
+  overwriteBtn.disabled = !model || !currentFilePath || currentFilePath.startsWith('untitled:');
   rebindBtn.disabled = !model?.skeleton.length;
   undoBtn.disabled = !undoStack.length;
   redoBtn.disabled = !redoStack.length;
   updateAnimationBindingStatus();
+  modelTabs?.refresh();
 }
 
 function updateAnimationBindingStatus(): void {
@@ -704,7 +711,12 @@ function frameModel(): void {
 
 function loadModelText(text: string, name: string, path = ''): void {
   try {
-    model = RwrModel.parse(text);
+    const parsed = RwrModel.parse(text);
+    if (modelTabs) {
+      modelTabs.open({ name, path: path || 'untitled://' + crypto.randomUUID() + '/' + name, model: parsed, undo: [], redo: [], selected: [], camera: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 } });
+      return;
+    }
+    model = parsed;
     currentFileName = name;
     currentFilePath = path;
     selectedIds.clear();
@@ -727,9 +739,12 @@ function loadModelText(text: string, name: string, path = ''): void {
 }
 
 async function loadDroppedModelPath(path: string): Promise<void> {
+  if (documentWorkspace.busy) return;
+  const existing = modelTabs?.find(path); if (existing) { modelTabs!.activate(existing.id); return; }
+  const token = ++modelOpenToken;
   try {
     const result = await desktopBridge.openDroppedTextFile(path);
-    loadModelText(result.text, result.name, result.path);
+    if (token === modelOpenToken) loadModelText(result.text, result.name, result.path);
   } catch (error) {
     const message = error instanceof Error ? error.message : '无法读取拖入的模型。';
     setStatus(message, 'warning');
@@ -787,6 +802,7 @@ function loadAnimationText(text: string, name: string): void {
     renderAnimationPose();
     updateAnimationEditor();
     animationWorkbench.setOpen(true);
+    modelTabs?.refresh();
     toast(`已载入 ${animations.length} 个动画`, 'success');
   } catch (error) {
     toast(error instanceof Error ? error.message : '无法读取动画文件。', 'warning');
@@ -853,6 +869,7 @@ function updateAnimationWorkspaceStatus(): void {
 
 function markAnimationDirty(): void {
   animationDirty = true;
+  modelTabs?.refresh();
   updateAnimationWorkspaceStatus();
 }
 
@@ -962,7 +979,7 @@ function commit(
   operation: () => boolean | void,
   failureMessage = '目标位置被其它体素占用。',
 ): void {
-  if (!model) return;
+  if (!model || documentWorkspace.busy) return;
   exitVoxelAnimationPreview();
   const before = model.snapshot();
   const result = operation();
@@ -980,7 +997,7 @@ function commit(
 }
 
 function undo(): void {
-  if (!model || !undoStack.length) return;
+  if (documentWorkspace.busy || !model || !undoStack.length) return;
   exitVoxelAnimationPreview();
   redoStack.push(model.snapshot());
   model.restore(undoStack.pop()!);
@@ -991,7 +1008,7 @@ function undo(): void {
 }
 
 function redo(): void {
-  if (!model || !redoStack.length) return;
+  if (documentWorkspace.busy || !model || !redoStack.length) return;
   exitVoxelAnimationPreview();
   undoStack.push(model.snapshot());
   model.restore(redoStack.pop()!);
@@ -1002,6 +1019,7 @@ function redo(): void {
 }
 
 function scheduleAutosave(): void {
+  modelTabs?.refresh();
   if (!settings.autosave || !model) return;
   window.clearTimeout(autosaveTimer);
   autosaveTimer = window.setTimeout(() => {
@@ -1018,7 +1036,7 @@ function scheduleAutosave(): void {
 }
 
 function setTool(tool: ToolId): void {
-  if (tool !== 'marquee' && marqueePointerId !== null) releaseMarqueePointer(marqueePointerId);
+  if (marqueePointerId !== null) releaseMarqueePointer(marqueePointerId);
   activeTool = tool;
   document.querySelectorAll<HTMLButtonElement>('button[data-tool]').forEach((button) => {
     const active = button.dataset.tool === tool;
@@ -1054,12 +1072,6 @@ function hitVoxel(
     return { voxel, index: hit.instanceId, normal };
   }
   return null;
-}
-
-interface MarqueeCandidate {
-  id: string;
-  index: number;
-  rect: ScreenRect;
 }
 
 const marqueeInstanceMatrix = new THREE.Matrix4();
@@ -1099,38 +1111,6 @@ function projectVoxelRect(index: number): ScreenRect | null {
   return { left, top, right, bottom };
 }
 
-function nearestVoxelAtScreenPoint(x: number, y: number, width: number, height: number): number | null {
-  if (!voxelMesh || !width || !height) return null;
-  pointer.set((x / width) * 2 - 1, -(y / height) * 2 + 1);
-  raycaster.setFromCamera(pointer, camera);
-  const hit = raycaster.intersectObject(voxelMesh, false)[0];
-  return hit?.instanceId ?? null;
-}
-
-function visibleMarqueeCandidates(candidates: MarqueeCandidate[]): MarqueeCandidate[] {
-  const canvasRect = renderer.domElement.getBoundingClientRect();
-  const nearestByPoint = new Map<string, number | null>();
-  return candidates.filter((candidate) => {
-    const { left, top, right, bottom } = candidate.rect;
-    const samples: Array<[number, number]> = [
-      [0.5, 0.5],
-      [0.25, 0.25],
-      [0.75, 0.25],
-      [0.25, 0.75],
-      [0.75, 0.75],
-    ];
-    return samples.some(([xRatio, yRatio]) => {
-      const x = left + (right - left) * xRatio;
-      const y = top + (bottom - top) * yRatio;
-      const key = `${Math.round(x)}:${Math.round(y)}`;
-      if (!nearestByPoint.has(key)) {
-        nearestByPoint.set(key, nearestVoxelAtScreenPoint(x, y, canvasRect.width, canvasRect.height));
-      }
-      return nearestByPoint.get(key) === candidate.index;
-    });
-  });
-}
-
 function updateMarqueeOverlay(x: number, y: number): ScreenRect {
   const rect = normalizeScreenRect(marqueeStart.x, marqueeStart.y, x, y);
   marqueeSelection.style.left = `${rect.left}px`;
@@ -1141,15 +1121,15 @@ function updateMarqueeOverlay(x: number, y: number): ScreenRect {
 }
 
 function beginMarquee(event: PointerEvent): boolean {
-  if (activeTool !== 'marquee' || event.button !== 0) return false;
+  if (activeTool !== 'select' || event.button !== 0) return false;
   exitVoxelAnimationPreview();
   releaseCameraInput();
   const rect = renderer.domElement.getBoundingClientRect();
   marqueePointerId = event.pointerId;
   marqueeStart = { x: event.clientX - rect.left, y: event.clientY - rect.top };
   controls.enabled = false;
-  marqueeSelection.hidden = false;
-  marqueeSelection.setAttribute('aria-hidden', 'false');
+  marqueeSelection.hidden = true;
+  marqueeSelection.setAttribute('aria-hidden', 'true');
   updateMarqueeOverlay(marqueeStart.x, marqueeStart.y);
   renderer.domElement.setPointerCapture(event.pointerId);
   event.preventDefault();
@@ -1160,8 +1140,13 @@ function beginMarquee(event: PointerEvent): boolean {
 function updateMarquee(event: PointerEvent): boolean {
   if (marqueePointerId !== event.pointerId) return false;
   const rect = renderer.domElement.getBoundingClientRect();
-  updateMarqueeOverlay(event.clientX - rect.left, event.clientY - rect.top);
-  pointerDragged = true;
+  const current = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  if (exceedsPointerDragThreshold(marqueeStart, current)) pointerDragged = true;
+  if (pointerDragged) {
+    marqueeSelection.hidden = false;
+    marqueeSelection.setAttribute('aria-hidden', 'false');
+    updateMarqueeOverlay(current.x, current.y);
+  }
   event.preventDefault();
   event.stopImmediatePropagation();
   return true;
@@ -1181,12 +1166,13 @@ function finishMarquee(event: PointerEvent): boolean {
   const selection = updateMarqueeOverlay(event.clientX - canvasRect.left, event.clientY - canvasRect.top);
   releaseMarqueePointer(event.pointerId);
 
-  if (model && selection.right - selection.left >= 4 && selection.bottom - selection.top >= 4) {
+  if (!pointerDragged) handleVoxelAction(event);
+  else if (model) {
     const candidates = instanceVoxels.flatMap((voxel, index) => {
       const rect = projectVoxelRect(index);
       return rect && rectangleOverlapRatio(selection, rect) > 0.5 ? [{ id: voxel.id, index, rect }] : [];
     });
-    const matches = marqueeMode === 'visible' ? visibleMarqueeCandidates(candidates) : candidates;
+    const matches = candidates;
     if (!event.ctrlKey) selectedIds.clear();
     matches.forEach((candidate) => selectedIds.add(candidate.id));
     rebuildVoxelMesh();
@@ -1308,6 +1294,7 @@ function exitVoxelAnimationPreview(): void {
 }
 
 function handleVoxelAction(event: PointerEvent): void {
+  if (documentWorkspace.busy) return;
   if (!model) return;
   exitVoxelAnimationPreview();
   const hit = hitVoxel(event);
@@ -1343,6 +1330,7 @@ function handleSculptDelete(event: PointerEvent): void {
 }
 
 function beginVoxelStroke(event: PointerEvent): boolean {
+  if (documentWorkspace.busy) return false;
   if (event.button !== 0 || (activeTool !== 'paint' && activeTool !== 'sculpt') || !model) return false;
   exitVoxelAnimationPreview();
   voxelStroke = {
@@ -1528,6 +1516,7 @@ function pasteSelectedModelBlock(): void {
 }
 
 async function openFile(kind: 'model' | 'animation'): Promise<void> {
+  if (documentWorkspace.busy || !documentWorkspace.ready) return;
   if (
     kind === 'animation' &&
     animationDirty &&
@@ -1559,11 +1548,12 @@ async function openFile(kind: 'model' | 'animation'): Promise<void> {
 }
 
 async function saveModelAs(): Promise<boolean> {
-  if (!model) return false;
+  if (!model || modelSaving) return false;
+  modelSaving = true; documentWorkspace.busy = true;
   try {
     const xml = model.serialize();
     const stem = currentFileName.replace(/\.xml$/i, '');
-    const defaultName = currentFilePath ? `${stem}_edited.xml` : currentFileName;
+    const defaultName = currentFilePath && !currentFilePath.startsWith('untitled:') ? `${stem}_edited.xml` : currentFileName;
     if (desktopBridge.isAvailable()) {
       const result = await desktopBridge.saveTextFile(defaultName, xml);
       if (!result) return false;
@@ -1586,10 +1576,13 @@ async function saveModelAs(): Promise<boolean> {
       updateStats();
       toast(`已导出：${defaultName}`, 'success');
     }
+    modelTabs?.keep(); modelTabs?.refresh();
     return true;
   } catch (error) {
     toast(error instanceof Error ? error.message : '导出失败。', 'warning');
     return false;
+  } finally {
+    modelSaving = false; documentWorkspace.busy = !!closeTabResolver;
   }
 }
 
@@ -1612,11 +1605,13 @@ function requestOverwriteConfirmation(): Promise<boolean> {
 }
 
 async function overwriteModel(): Promise<boolean> {
-  if (!model || !currentFilePath || !desktopBridge.isAvailable()) return false;
+  if (!model || modelSaving || !currentFilePath || currentFilePath.startsWith('untitled:') || !desktopBridge.isAvailable()) return false;
   if (!(await requestOverwriteConfirmation())) return false;
+  modelSaving = true; documentWorkspace.busy = true;
   try {
     const result = await desktopBridge.overwriteTextFile(currentFilePath, model.serialize());
     model.dirty = false;
+    modelTabs?.keep();
     updateStats();
     toast(`已覆盖保存：${result.name}`, 'success');
     setStatus(`已覆盖：${result.path}`, 'success');
@@ -1624,10 +1619,20 @@ async function overwriteModel(): Promise<boolean> {
   } catch (error) {
     toast(error instanceof Error ? error.message : '覆盖保存失败。', 'warning');
     return false;
+  } finally {
+    modelSaving = false; documentWorkspace.busy = !!closeTabResolver;
   }
 }
 
 function createNewModel(announce = true): void {
+  if (modelTabs) {
+    if (documentWorkspace.busy) return;
+    const existingNames = new Set(modelTabs.tabs.map(tab => tab.state.name));
+    let index = 1; while (existingNames.has('Untitled-' + index + '.xml')) index++;
+    modelTabs.open({ name: 'Untitled-' + index + '.xml', path: 'untitled://' + crypto.randomUUID(), model: RwrModel.createNew(), undo: [], redo: [], selected: [], camera: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 } }, true);
+    setTool(announce ? 'sculpt' : 'select'); if (announce) toast('新模型已创建。', 'success');
+    return;
+  }
   model = RwrModel.createNew();
   setColorSampling(false);
   currentFileName = 'untitled.xml';
@@ -1857,24 +1862,9 @@ function renderAnimationPose(positions?: Vec3[]): void {
   applyVoxelAnimation(pose);
 }
 
-const shortcutActions: ShortcutAction[] = [
-  'newModel',
-  'openModel',
-  'overwrite',
-  'saveAs',
-  'undo',
-  'redo',
-  'deleteSelection',
-  'toolSelect',
-  'toolSculpt',
-  'toolPaint',
-  'marqueeThrough',
-  'marqueeVisible',
-  'cameraForward',
-  'cameraBack',
-  'cameraLeft',
-  'cameraRight',
-];
+const shortcutActions: ShortcutAction[] = shortcutEntries.map(row => row[0]);
+let shortcutChord = '';
+let shortcutChordTimer: ReturnType<typeof setTimeout> | undefined;
 
 function shortcutFromEvent(event: KeyboardEvent, ignoreShift = false): string | null {
   if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) return null;
@@ -1901,9 +1891,14 @@ function cameraShortcutActionForEvent(event: KeyboardEvent): ShortcutAction | nu
 }
 
 function updateShortcutLabels(): void {
+  const list = document.querySelector('.shortcut-list');
+  if (list) for (const [action] of orderedShortcuts(settings.shortcuts)) {
+    const row = list.querySelector('[data-shortcut-input="' + action + '"]')?.parentElement;
+    if (row) list.append(row);
+  }
   document.querySelectorAll<HTMLElement>('[data-shortcut-label]').forEach((label) => {
     const action = label.dataset.shortcutLabel as ShortcutAction;
-    label.textContent = settings.shortcuts[action].replaceAll('+', ' ');
+    label.textContent = settings.shortcuts[action];
   });
   undoBtn.title = `撤销 (${settings.shortcuts.undo})`;
   redoBtn.title = `重做 (${settings.shortcuts.redo})`;
@@ -2021,11 +2016,10 @@ function bindSettings(): void {
       input.blur();
     }),
   );
-  element('#resetSettingsBtn').addEventListener('click', () => {
-    settings = { ...defaultSettings, shortcuts: { ...defaultSettings.shortcuts } };
+  element('#resetShortcutsBtn').addEventListener('click', () => {
+    settings.shortcuts = { ...defaultSettings.shortcuts };
     populateSettingsForm();
     applySettings();
-    toast('设置已恢复默认值', 'success');
   });
 }
 
@@ -2033,22 +2027,6 @@ document
   .querySelectorAll<HTMLButtonElement>('button[data-tool]')
   .forEach((button) => button.addEventListener('click', () => setTool(button.dataset.tool as ToolId)));
 
-function activateMarqueeMode(mode: 'visible' | 'through'): void {
-  marqueeMode = mode;
-  document.querySelectorAll<HTMLButtonElement>('[data-marquee-mode]').forEach((item) => {
-    item.classList.toggle('active', item.dataset.marqueeMode === mode);
-  });
-  const marqueeTool = element<HTMLButtonElement>('#marqueeToolBtn');
-  marqueeTool.title = `框选 · ${mode === 'visible' ? '可视框选' : '穿透框选'}`;
-  setTool('marquee');
-}
-
-document.querySelectorAll<HTMLButtonElement>('[data-marquee-mode]').forEach((button) =>
-  button.addEventListener('click', (event) => {
-    event.stopPropagation();
-    activateMarqueeMode(button.dataset.marqueeMode === 'through' ? 'through' : 'visible');
-  }),
-);
 colorSampleBtn.addEventListener('click', () => setColorSampling(!colorSampling));
 colorSwatch.addEventListener('click', (event) => {
   event.stopPropagation();
@@ -2092,29 +2070,33 @@ function closeFileMenu(): void {
 }
 function requestNewModel(): void {
   closeFileMenu();
-  if (model?.dirty) unsavedModelModal.classList.remove('hidden');
-  else createNewModel();
+  createNewModel();
 }
 async function saveBeforeNew(forceSaveAs: boolean): Promise<void> {
-  const saved = forceSaveAs || !currentFilePath ? await saveModelAs() : await overwriteModel();
-  if (saved) createNewModel();
+  const saved = forceSaveAs || !currentFilePath || currentFilePath.startsWith('untitled:') ? await saveModelAs() : await overwriteModel();
+  if (saved) finishCloseDecision('discard');
+}
+function finishCloseDecision(decision: 'save' | 'discard' | 'cancel') {
+  unsavedModelModal.classList.add('hidden');
+  const resolve = closeTabResolver; closeTabResolver = null; resolve?.(decision);
 }
 fileMenuBtn.addEventListener('click', (event) => {
   event.stopPropagation();
-  const willOpen = fileMenu.classList.contains('hidden');
-  fileMenu.classList.toggle('hidden', !willOpen);
-  fileMenuBtn.setAttribute('aria-expanded', String(willOpen));
+  fileMenu.classList.remove('hidden');
+  fileMenuBtn.setAttribute('aria-expanded', 'true');
 });
+fileMenuBtn.parentElement!.addEventListener('mouseenter', () => { fileMenu.classList.remove('hidden'); fileMenuBtn.setAttribute('aria-expanded', 'true'); });
+fileMenuBtn.parentElement!.addEventListener('mouseleave', closeFileMenu);
 document.addEventListener('pointerdown', (event) => {
   if (!(event.target as Element).closest('.file-menu-wrap')) closeFileMenu();
 });
 element('#newModelBtn').addEventListener('click', requestNewModel);
 element('#saveBeforeNewBtn').addEventListener('click', () => void saveBeforeNew(false));
 element('#saveAsBeforeNewBtn').addEventListener('click', () => void saveBeforeNew(true));
-element('#discardBeforeNewBtn').addEventListener('click', () => createNewModel());
-element('#cancelBeforeNewBtn').addEventListener('click', () => unsavedModelModal.classList.add('hidden'));
+element('#discardBeforeNewBtn').addEventListener('click', () => finishCloseDecision('discard'));
+element('#cancelBeforeNewBtn').addEventListener('click', () => finishCloseDecision('cancel'));
 unsavedModelModal.addEventListener('pointerdown', (event) => {
-  if (event.target === unsavedModelModal) unsavedModelModal.classList.add('hidden');
+  if (event.target === unsavedModelModal) finishCloseDecision('cancel');
 });
 overwriteConfirmCheck.addEventListener('change', () => {
   confirmOverwriteBtn.disabled = !overwriteConfirmCheck.checked;
@@ -2129,6 +2111,8 @@ element('#openModelBtn').addEventListener('click', () => {
   void openFile('model');
 });
 element('#openAnimationBtn').addEventListener('click', () => void openFile('animation'));
+element('#closeModelTabBtn').addEventListener('click', () => { closeFileMenu(); void documentWorkspace.close(documentWorkspace.activeId); });
+element('#closeAllModelTabsBtn').addEventListener('click', () => { closeFileMenu(); void documentWorkspace.bulkClose('all', documentWorkspace.activeId); });
 saveAsBtn.addEventListener('click', () => {
   closeFileMenu();
   void saveModelAs();
@@ -2367,8 +2351,8 @@ renderer.domElement.addEventListener(
       event.stopImmediatePropagation();
       return;
     }
-    if (beginMarquee(event)) return;
     if (beginBoneDrag(event)) return;
+    if (beginMarquee(event)) return;
     if (beginVoxelStroke(event)) return;
     if (event.button === 2) {
       cameraLookActive = false;
@@ -2438,6 +2422,7 @@ renderer.domElement.addEventListener(
   { capture: true },
 );
 renderer.domElement.addEventListener('lostpointercapture', (event) => {
+  if (cancelMarquee(event.pointerId)) return;
   if (cameraLookPointerId !== event.pointerId) return;
   cameraLookActive = false;
   cameraLookPointerId = null;
@@ -2469,8 +2454,14 @@ viewport.addEventListener('drop', (event) => {
 });
 
 function runShortcutAction(action: ShortcutAction): void {
-  if (action === 'marqueeThrough' || action === 'marqueeVisible') {
-    activateMarqueeMode(action === 'marqueeThrough' ? 'through' : 'visible');
+  if (documentWorkspace.busy) return;
+  if (action === 'closeTab') { void documentWorkspace.close(documentWorkspace.activeId); return; }
+  if (action === 'closeAll' || action === 'closeSaved') { void documentWorkspace.bulkClose(action === 'closeAll' ? 'all' : 'saved', documentWorkspace.activeId); return; }
+  if (action === 'nextTab' || action === 'previousTab') { modelTabs?.cycle(action === 'nextTab' ? 1 : -1); return; }
+  if (action === 'keepOpen') { documentWorkspace.keepOpen(documentWorkspace.activeId); return; }
+  if (action === 'pinTab') { documentWorkspace.pin(documentWorkspace.activeId); return; }
+  if (action === 'marqueeThrough') {
+    setTool('select');
     return;
   }
   const tools: Partial<Record<ShortcutAction, ToolId>> = {
@@ -2507,7 +2498,7 @@ window.addEventListener(
       closeFileMenu();
       if (!deleteSelectionModal.classList.contains('hidden')) closeDeleteSelectionModal();
       else if (!overwriteModal.classList.contains('hidden')) closeOverwriteModal(false);
-      else unsavedModelModal.classList.add('hidden');
+      else finishCloseDecision('cancel');
     }
     if (
       !settingsModal.classList.contains('hidden') ||
@@ -2524,7 +2515,13 @@ window.addEventListener(
       return;
     }
     if (target.closest('input, select, textarea')) return;
-    const action = shortcutActionForEvent(event);
+    const stroke = shortcutFromEvent(event); if (!stroke) return;
+    const match = matchShortcut(settings.shortcuts, stroke, shortcutChord); shortcutChord = '';
+    if (match.prefix) {
+      event.preventDefault(); shortcutChord = match.prefix;
+      clearTimeout(shortcutChordTimer); shortcutChordTimer = setTimeout(() => { shortcutChord = ''; }, 2000); return;
+    }
+    const action = match.action;
     if (!action) return;
     event.preventDefault();
     if (!event.repeat) runShortcutAction(action);
@@ -2557,9 +2554,49 @@ void bindDesktopFileDrop();
 renderVoxelBlockLibrary();
 setCurrentColor(pickedColor.r, pickedColor.g, pickedColor.b);
 applySettings();
-createNewModel(false);
-setTool('select');
-void loadStartupModel();
+modelTabs = new ModelTabsController({
+  capture: () => model ? ({ name: currentFileName, path: currentFilePath, model, undo: undoStack, redo: redoStack, selected: [...selectedIds], camera: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, target: { x: controls.target.x, y: controls.target.y, z: controls.target.z } }) : undefined,
+  apply: state => {
+    ++modelOpenToken; releaseCameraInput(); animationPlaying = false; setColorSampling(false);
+    model = state?.model ?? null; currentFileName = state?.name ?? ''; currentFilePath = state?.path ?? '';
+    undoStack = state?.undo ?? []; redoStack = state?.redo ?? []; selectedIds = new Set(state?.selected ?? []);
+    modelName.textContent = currentFileName || '—'; modelPath.textContent = currentFilePath.startsWith('untitled:') ? '' : currentFilePath;
+    rebuildVoxelMesh(); renderAnimationPose();
+    if (state && (state.camera.x || state.camera.y || state.camera.z)) {
+      camera.position.set(state.camera.x, state.camera.y, state.camera.z);
+      controls.target.set(state.target.x, state.target.y, state.target.z); controls.update();
+    } else frameModel();
+    updateStats(); updateAnimationEditor();
+  },
+  confirmClose: () => { unsavedModelModal.classList.remove('hidden'); return new Promise(resolve => { closeTabResolver = resolve; }); },
+  save: () => currentFilePath && !currentFilePath.startsWith('untitled:') ? overwriteModel() : saveModelAs(),
+  error: error => toast(error instanceof Error ? error.message : String(error), 'warning'),
+  captureExtras: () => ({ animations, animationDirty, currentAnimationFileName, activeAnimation: animations.indexOf(activeAnimation!), selectedFrameIndex, animationPage }),
+  restoreExtras: value => {
+    const saved = value as { animations?: RwrAnimation[]; animationDirty?: boolean; currentAnimationFileName?: string; activeAnimation?: number; selectedFrameIndex?: number; animationPage?: 'preview' | 'edit' } | null;
+    if (!saved || !Array.isArray(saved.animations)) return;
+    animations = saved.animations; activeAnimation = animations[saved.activeAnimation ?? 0] ?? null;
+    animationDirty = !!saved.animationDirty; currentAnimationFileName = saved.currentAnimationFileName ?? 'animations.xml'; selectedFrameIndex = saved.selectedFrameIndex ?? 0;
+    updateAnimationSelect(); switchAnimationPage(saved.animationPage === 'edit' ? 'edit' : 'preview');
+  },
+});
+documentWorkspace.openPath = loadDroppedModelPath;
+void (async () => {
+  if (!(await modelTabs!.restore())) createNewModel(false);
+  setTool('select');
+  if (desktopBridge.isAvailable()) {
+    const appWindow = getCurrentWindow(); let exiting = false;
+    await appWindow.onCloseRequested(async event => {
+      event.preventDefault();
+      if (exiting || modelSaving) return;
+      exiting = true;
+      try { await modelTabs!.persist(); await appWindow.destroy(); }
+      catch (error) { exiting = false; toast(String(error), 'warning'); }
+    });
+  }
+  await loadStartupModel();
+})();
+window.addEventListener('pagehide', () => { void modelTabs?.persist(); });
 
 let previousFrame = performance.now();
 let fpsFrameCount = 0;

@@ -44,7 +44,7 @@ const tools = [
       </div>
       <ColorControls />
     </section>
-    <section class="panel selection-panel" data-tool-panel="select marquee">
+    <section class="panel selection-panel" data-tool-panel="select">
       <div class="panel-title">
         <h3>移动</h3>
         <button id="clearSelectionBtn" class="text-button">清除</button>

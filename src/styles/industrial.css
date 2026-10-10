@@ -255,6 +255,66 @@ kbd {
 
 @media (max-width: 1200px) {
   .workspace {
-    grid-template-columns: 70px minmax(380px, 1fr) 330px;
+    grid-template-columns: minmax(380px, 1fr) 330px;
   }
 }
+
+/* Compact controls and shared shortcut presentation. */
+.workspace { grid-template-columns: minmax(440px, 1fr) 370px; }
+@media (max-width: 1200px) { .workspace { grid-template-columns: minmax(380px, 1fr) 330px; } }
+.topbar { gap: 12px; padding: 8px 14px; }
+.file-actions { gap: 5px; }
+.button, .icon-button, .tool-tabs button, .text-button { border-radius: 3px; box-shadow: none; min-height: 32px; padding: 5px 11px; font-weight: 400; font-size: .82rem; letter-spacing: normal; }
+.button:not(.primary), .icon-button { border: 1px solid var(--border-light); background: var(--surface-0); }
+.button:hover:not(:disabled), .icon-button:hover:not(:disabled) { border-color: var(--accent); background: var(--surface-2); }
+.file-menu { top: 100%; min-width: 265px; width: max-content; padding: 5px; border-radius: 5px; background: var(--surface-1); box-shadow: 0 8px 30px #0006; }
+.file-menu button { min-height: 30px; padding: 5px 9px; gap: 25px; border-radius: 3px; font-size: .75rem; }
+.file-menu strong { font-size: inherit; font-weight: 400; }
+.file-menu kbd { border: 0; padding: 0; background: transparent; box-shadow: none; color: var(--muted); font: .69rem Consolas, monospace; }
+.menu-caret { border-top-width: 5px; border-left-width: 4px; border-right-width: 4px; }
+.shortcut-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+.shortcut-group { margin-top: 20px; }
+.shortcut-group h3 { color: var(--accent); margin: 0 0 10px; font-size: .82rem; }
+.shortcut-list label { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 36px; border-bottom: 1px solid var(--border); font-size: .78rem; }
+.shortcut-list input { width: 180px; height: 28px; min-height: 0; padding: 3px 8px; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); background: var(--surface-0); font: .72rem Consolas, monospace; text-align: right; }
+.shortcut-reset-row { display: flex; justify-content: flex-end; }
+
+/* Always reserve the Studio-style tab strip, including with no documents. */
+.workspace { grid-template-columns: var(--model-workspace-width, 230px) 6px minmax(0, 1fr) 350px; grid-template-rows: 37px minmax(0, 1fr); gap: 0; }
+.workspace > .document-tabs { grid-column: 1 / -1; grid-row: 1; }
+.workspace > .model-workspace { grid-column: 1; grid-row: 2; }
+.workspace > .model-workspace-splitter { grid-column: 2; grid-row: 2; }
+.workspace > .viewport-panel { grid-column: 3; grid-row: 2; }
+.workspace > .inspector { grid-column: 4; grid-row: 2; }
+.document-tabs { display: flex; overflow-x: auto; overflow-y: hidden; min-width: 0; height: 37px; background: var(--surface-0); border-bottom: 1px solid var(--border); scrollbar-width: thin; }
+.document-tab { display: flex; align-items: center; flex: 0 0 auto; border-right: 1px solid var(--border); border-top: 2px solid transparent; max-width: 280px; }
+.document-tab.active { background: var(--surface-1); border-top-color: var(--accent); }
+.document-tab > button { background: transparent; border: 0; border-radius: 0; padding: 4px 10px; min-height: 30px; color: var(--muted); cursor: pointer; font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.document-tab.active > button { color: var(--text); }
+.document-tab.preview > button[role=tab] { font-style: italic; }
+.document-tab > .document-tab-close { width: 28px; flex: 0 0 28px; padding: 3px; }
+.tab-pin { display: inline-block; vertical-align: middle; width: 16px; height: 16px; color: #c4c8cb; }
+.tab-dirty-dot { display: inline-block; vertical-align: middle; width: 8px; height: 8px; border-radius: 50%; background: #c4c8cb; }
+.document-tab.dirty .tab-close-cross { display: none; }
+.document-tab-close:hover .tab-dirty-dot { display: none; }
+.document-tab-close:hover .tab-close-cross { display: inline; }
+.document-tab-menu { position: fixed; z-index: 100; width: 260px; padding: 5px; border: 1px solid var(--border-light); background: var(--surface-1); box-shadow: 0 8px 30px #0006; }
+.document-tab-menu button { display: block; text-align: left; width: 100%; padding: 6px 10px; color: var(--text); background: transparent; border: 0; cursor: pointer; font-size: .75rem; }
+.document-tab-menu button:hover { background: var(--surface-2); }
+.document-tab-menu hr { border: 0; border-top: 1px solid var(--border); }
+.model-workspace { min-width: 0; overflow: hidden; background: var(--surface-0); display: flex; flex-direction: column; }
+.model-workspace.collapsed { visibility: hidden; }
+.model-workspace header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; white-space: nowrap; font-size: .78rem; }
+.model-workspace header button { font-size: .7rem; padding: 3px 8px; }
+.workspace-root { padding: 5px 9px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .68rem; }
+.workspace-tree { overflow: auto; min-height: 0; flex: 1; }
+.workspace-entry { display: flex; align-items: center; gap: 7px; width: 100%; padding: 5px 9px; background: transparent; color: var(--text); border: 0; text-align: left; cursor: pointer; font-size: .72rem; white-space: nowrap; }
+.workspace-entry > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.workspace-entry.active { background: var(--surface-2); box-shadow: inset 2px 0 var(--accent); }
+.workspace-entry:disabled { color: var(--muted); cursor: default; opacity: .5; }
+.workspace-entry:hover:not(:disabled) { background: var(--surface-1); }
+.workspace-error { font-size: .72rem; padding: 8px; color: #e29696; overflow-wrap: anywhere; }
+.model-workspace-splitter { position: relative; background: var(--border); cursor: col-resize; touch-action: none; z-index: 4; }
+.model-workspace-splitter > span { position: absolute; left: 0; top: 45%; width: 12px; height: 44px; border-radius: 0 4px 4px 0; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border-light); color: var(--muted); font-size: 15px; }
+.model-workspace-splitter:hover, .model-workspace-splitter:focus-visible { background: var(--accent); outline: none; }
+@media (max-width: 1200px) { .workspace { grid-template-columns: var(--model-workspace-width, 230px) 6px minmax(0, 1fr) 310px; } }

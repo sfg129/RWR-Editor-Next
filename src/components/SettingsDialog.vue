@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { isTauriRuntime, openExternalUrl } from '../platform/external-links';
 import LanguageSelect from './LanguageSelect.vue';
+import { orderedShortcuts } from '../core/editor/shortcuts';
+import { loadSettings } from '../config/settings';
 
 const repositoryUrl = 'https://github.com/sfg129/RWR-Editor-Next';
 function handleRepositoryClick(event: MouseEvent): void {
@@ -10,24 +12,7 @@ function handleRepositoryClick(event: MouseEvent): void {
     console.warn('Unable to open the repository URL.', error),
   );
 }
-const shortcuts = [
-  ['newModel', '新建模型'],
-  ['openModel', '打开模型'],
-  ['overwrite', '覆盖保存'],
-  ['saveAs', '另存为'],
-  ['undo', '撤销'],
-  ['redo', '重做'],
-  ['deleteSelection', '删除体素'],
-  ['toolSelect', '选择工具'],
-  ['toolSculpt', '修改工具'],
-  ['toolPaint', '绘色工具'],
-  ['marqueeThrough', '穿透框选'],
-  ['marqueeVisible', '可视框选'],
-  ['cameraForward', '视角前进'],
-  ['cameraBack', '视角后退'],
-  ['cameraLeft', '视角左移'],
-  ['cameraRight', '视角右移'],
-] as const;
+const shortcuts = orderedShortcuts(loadSettings().shortcuts);
 </script>
 
 <template>
@@ -80,6 +65,7 @@ const shortcuts = [
             </div>
           </section>
           <section class="settings-page" data-page="shortcuts">
+            <div class="shortcut-reset-row"><button id="resetShortcutsBtn" class="button">恢复默认</button></div>
             <div class="shortcut-list">
               <label v-for="shortcut in shortcuts" :key="shortcut[0]"
                 >{{ shortcut[1] }}<input readonly :data-shortcut-input="shortcut[0]"
@@ -106,8 +92,7 @@ const shortcuts = [
         </div>
       </div>
       <footer>
-        <button id="resetSettingsBtn" class="button">恢复默认</button
-        ><button id="doneSettingsBtn" class="button primary">完成</button>
+        <button id="doneSettingsBtn" class="button primary">完成</button>
       </footer>
     </div>
   </div>

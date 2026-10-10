@@ -15,6 +15,12 @@ function uniqueMatches(source: string, pattern: RegExp): string[] {
 }
 
 describe('Vue editor DOM contract', () => {
+  it('lists single-key tools and camera movement before common or complex shortcuts', async () => {
+    const settings = await Bun.file('src/components/SettingsDialog.vue').text();
+    expect(settings).toContain('orderedShortcuts(loadSettings().shortcuts)');
+    expect(settings).not.toContain('shortcutGroups');
+    expect(settings).not.toContain('marqueeVisible');
+  });
   it('keeps actionable help and warnings without development explanations', () => {
     for (const copy of [
       '所有解析与保存均在本机完成',
@@ -40,17 +46,17 @@ describe('Vue editor DOM contract', () => {
     expect(controllerSource).not.toContain('载入动画 XML 后可同步预览骨骼与体素');
   });
 
-  it('keeps only three settings pages and the marquee tool in the left rail', async () => {
+  it('keeps three settings pages, moves settings into the header and integrates marquee into Select', async () => {
     const settings = await Bun.file('src/components/SettingsDialog.vue').text();
     expect(uniqueMatches(settings, /data-settings-page="([^"]+)"/g)).toEqual([
       'settings',
       'shortcuts',
       'about',
     ]);
-    const rail = await Bun.file('src/components/ToolRail.vue').text();
-    expect(uniqueMatches(rail, /data-tool="([^"]+)"/g)).toEqual(['marquee']);
-    expect(rail).toContain('data-shortcut-label="marqueeThrough"');
-    expect(rail.slice(0, rail.indexOf('class="marquee-mode-menu"'))).not.toContain('<kbd');
+    const app = await Bun.file('src/App.vue').text();
+    expect(app).not.toContain('ToolRail');
+    expect(componentSource).not.toContain('id="marqueeToolBtn"');
+    expect(componentSource).toContain('id="settingsBtn"');
     expect(componentSource).not.toContain('id="activeToolLabel"');
     expect(componentSource).not.toContain('id="emptyState"');
     expect(componentSource).not.toContain('class="brand"');

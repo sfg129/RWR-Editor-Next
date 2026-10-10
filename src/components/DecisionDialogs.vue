@@ -9,7 +9,7 @@
     <div class="decision-dialog">
       <header>
         <div>
-          <h2 id="unsavedModelTitle">新建模型前如何处理当前文件？</h2>
+          <h2 id="unsavedModelTitle">是否保存对此文件的更改？</h2>
         </div>
       </header>
       <p>当前模型有未保存修改。</p>
