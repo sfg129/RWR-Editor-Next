@@ -67,9 +67,7 @@ const shortcuts = orderedShortcuts(loadSettings().shortcuts);
           <section class="settings-page" data-page="shortcuts">
             <div class="shortcut-reset-row"><button id="resetShortcutsBtn" class="button">恢复默认</button></div>
             <div class="shortcut-list">
-              <label v-for="shortcut in shortcuts" :key="shortcut[0]"
-                >{{ shortcut[1] }}<input readonly :data-shortcut-input="shortcut[0]"
-              /></label>
+              <div v-for="shortcut in shortcuts" :key="shortcut[0]" class="shortcut-row" :data-shortcut-row="shortcut[0]"><span>{{ shortcut[1] }}</span><div class="shortcut-slots"><span v-for="slot in [0, 1]" :key="slot" class="shortcut-slot"><input readonly data-no-localize :aria-label="shortcut[1]" :data-shortcut-input="shortcut[0]" :data-shortcut-slot="slot" /><button type="button" class="shortcut-clear" aria-label="清除" :data-shortcut-clear="shortcut[0]" :data-shortcut-slot="slot">×</button></span></div></div>
             </div>
           </section>
           <section class="settings-page" data-page="about">

@@ -59,7 +59,7 @@ describe('shortcut ordering', () => {
     const actions = orderedShortcuts(defaultSettings.shortcuts).map(row => row[0]);
     expect(actions.slice(0,8)).toEqual(['toolSelect','toolSculpt','toolPaint','cameraForward','cameraBack','cameraLeft','cameraRight','deleteSelection']);
     expect(actions[8]).toBe('marqueeThrough');
-    expect(actions.indexOf('nextTab')).toBeLessThan(actions.indexOf('overwrite'));
+    expect(actions.indexOf('nextTab')).toBeLessThan(actions.indexOf('saveAs'));
     expect(actions.indexOf('previousTab')).toBeLessThan(actions.indexOf('pinTab'));
     const custom = { ...defaultSettings.shortcuts, undo: 'Alt+Z' };
     expect(orderedShortcuts(custom).findIndex(row=>row[0]==='undo')).toBeGreaterThan(orderedShortcuts(custom).findIndex(row=>row[0]==='nextTab'));

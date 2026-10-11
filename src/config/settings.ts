@@ -1,5 +1,7 @@
 import type { EditorSettings } from '../core/types';
 import { isAppLanguage } from '../i18n/languages';
+import { loadBindings } from '../core/editor/shortcut-bindings';
+import type { ShortcutMap } from '../core/types';
 
 const STORAGE_KEY = 'rwr-editor-settings-v1';
 
@@ -40,8 +42,8 @@ export const defaultSettings: EditorSettings = {
   shortcuts: {
     newModel: 'Ctrl+N',
     openModel: 'Ctrl+O',
-    overwrite: 'Ctrl+Alt+S',
-    saveAs: 'Ctrl+S',
+    overwrite: 'Ctrl+S',
+    saveAs: 'Ctrl+Alt+S',
     undo: 'Ctrl+Z',
     redo: 'Ctrl+Y',
     deleteSelection: 'Delete',
@@ -56,7 +58,9 @@ export const defaultSettings: EditorSettings = {
     closeTab: 'Ctrl+F4', nextTab: 'Ctrl+Tab', previousTab: 'Ctrl+Shift+Tab',
     keepOpen: 'Ctrl+K Enter', pinTab: 'Ctrl+K Shift+Enter', closeSaved: 'Ctrl+K U', closeAll: 'Ctrl+K W',
   },
+  secondaryShortcuts: {} as ShortcutMap,
 };
+defaultSettings.secondaryShortcuts = Object.fromEntries(Object.keys(defaultSettings.shortcuts).map(key => [key, ''])) as ShortcutMap;
 
 export function loadSettings(): EditorSettings {
   try {
@@ -69,6 +73,10 @@ export function loadSettings(): EditorSettings {
       marqueeCompletionAction: _obsoleteMarqueeCompletionAction,
       ...compatibleStored
     } = stored;
+    const shortcuts = loadBindings(stored.shortcuts, defaultSettings.shortcuts);
+    if (!stored.secondaryShortcuts && shortcuts.overwrite === 'Ctrl+Alt+S' && shortcuts.saveAs === 'Ctrl+S') {
+      shortcuts.overwrite = defaultSettings.shortcuts.overwrite; shortcuts.saveAs = defaultSettings.shortcuts.saveAs;
+    }
     return {
       ...defaultSettings,
       ...compatibleStored,
@@ -80,15 +88,11 @@ export function loadSettings(): EditorSettings {
         typeof stored.fontSize === 'number' && Number.isFinite(stored.fontSize)
           ? Math.max(12, Math.min(20, Math.round(stored.fontSize)))
           : 16,
-      shortcuts: Object.fromEntries(
-        Object.entries(defaultSettings.shortcuts).map(([action, fallback]) => [
-          action,
-          stored.shortcuts?.[action as keyof EditorSettings['shortcuts']] ?? fallback,
-        ]),
-      ) as EditorSettings['shortcuts'],
+      shortcuts,
+      secondaryShortcuts: loadBindings(stored.secondaryShortcuts, defaultSettings.secondaryShortcuts),
     };
   } catch {
-    return { ...defaultSettings, shortcuts: { ...defaultSettings.shortcuts } };
+    return { ...defaultSettings, shortcuts: { ...defaultSettings.shortcuts }, secondaryShortcuts: { ...defaultSettings.secondaryShortcuts } };
   }
 }
 

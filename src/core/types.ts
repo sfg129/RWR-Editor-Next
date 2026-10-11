@@ -93,6 +93,7 @@ export interface EditorSettings {
   uiScale: number;
   fontSize: number;
   shortcuts: ShortcutMap;
+  secondaryShortcuts: ShortcutMap;
 }
 
 declare global {

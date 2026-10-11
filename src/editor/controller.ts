@@ -3,6 +3,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ModelTabsController, type ModelTabState } from './model-tabs-controller';
 import { documentWorkspace } from './document-workspace';
 import { orderedShortcuts, shortcutEntries, matchShortcut } from '../core/editor/shortcuts';
+import { conflictingBindings, ShortcutCapture, shortcutLabel } from '../core/editor/shortcut-bindings';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -1881,27 +1882,29 @@ function shortcutFromEvent(event: KeyboardEvent, ignoreShift = false): string | 
 
 function shortcutActionForEvent(event: KeyboardEvent): ShortcutAction | null {
   const shortcut = shortcutFromEvent(event);
-  return shortcutActions.find((action) => settings.shortcuts[action] === shortcut) ?? null;
+  return shortcut ? matchShortcut(settings.shortcuts, shortcut, '', settings.secondaryShortcuts).action ?? null : null;
 }
 
 function cameraShortcutActionForEvent(event: KeyboardEvent): ShortcutAction | null {
   const cameraActions: ShortcutAction[] = ['cameraForward', 'cameraBack', 'cameraLeft', 'cameraRight'];
   const shortcut = shortcutFromEvent(event, event.shiftKey);
-  return cameraActions.find((action) => settings.shortcuts[action] === shortcut) ?? null;
+  return cameraActions.find((action) => !!shortcut && (settings.shortcuts[action] === shortcut || settings.secondaryShortcuts[action] === shortcut)) ?? null;
 }
 
-function updateShortcutLabels(): void {
+function orderShortcutRows(): void {
   const list = document.querySelector('.shortcut-list');
-  if (list) for (const [action] of orderedShortcuts(settings.shortcuts)) {
-    const row = list.querySelector('[data-shortcut-input="' + action + '"]')?.parentElement;
+  if (list) for (const [action] of orderedShortcuts(settings.shortcuts, settings.secondaryShortcuts)) {
+    const row = list.querySelector('[data-shortcut-row="' + action + '"]');
     if (row) list.append(row);
   }
+}
+function updateShortcutLabels(): void {
   document.querySelectorAll<HTMLElement>('[data-shortcut-label]').forEach((label) => {
     const action = label.dataset.shortcutLabel as ShortcutAction;
-    label.textContent = settings.shortcuts[action];
+    label.textContent = shortcutLabel(settings.shortcuts, settings.secondaryShortcuts, action);
   });
-  undoBtn.title = `撤销 (${settings.shortcuts.undo})`;
-  redoBtn.title = `重做 (${settings.shortcuts.redo})`;
+  undoBtn.title = '撤销' + (shortcutLabel(settings.shortcuts, settings.secondaryShortcuts, 'undo') ? ` (${shortcutLabel(settings.shortcuts, settings.secondaryShortcuts, 'undo')})` : '');
+  redoBtn.title = '重做' + (shortcutLabel(settings.shortcuts, settings.secondaryShortcuts, 'redo') ? ` (${shortcutLabel(settings.shortcuts, settings.secondaryShortcuts, 'redo')})` : '');
 }
 
 function applySettings(): void {
@@ -1941,14 +1944,17 @@ function populateSettingsForm(): void {
   element<HTMLInputElement>('#fontSizeSetting').value = String(settings.fontSize);
   element<HTMLOutputElement>('#fontSizeValue').value = `${settings.fontSize} px`;
   element<HTMLSelectElement>('#languageSetting').value = settings.language;
+  const conflicts = conflictingBindings(settings.shortcuts, settings.secondaryShortcuts);
   document.querySelectorAll<HTMLInputElement>('[data-shortcut-input]').forEach((input) => {
-    input.value = settings.shortcuts[input.dataset.shortcutInput as ShortcutAction];
+    input.value = (input.dataset.shortcutSlot === '1' ? settings.secondaryShortcuts : settings.shortcuts)[input.dataset.shortcutInput as ShortcutAction];
+    input.classList.toggle('duplicate', conflicts.has(input.value));
   });
 }
 
 function bindSettings(): void {
   const close = () => settingsModal.classList.add('hidden');
   element('#settingsBtn').addEventListener('click', () => {
+    orderShortcutRows();
     populateSettingsForm();
     settingsModal.classList.remove('hidden');
   });
@@ -1991,33 +1997,40 @@ function bindSettings(): void {
     settings.language = (event.target as HTMLSelectElement).value as EditorSettings['language'];
     applySettings();
   });
-  document.querySelectorAll<HTMLInputElement>('[data-shortcut-input]').forEach((input) =>
+  const saveShortcutEdits = () => { saveSettings(settings); populateSettingsForm(); updateShortcutLabels(); };
+  document.querySelectorAll<HTMLInputElement>('[data-shortcut-input]').forEach((input) => {
+    const capture = new ShortcutCapture();
+    const clear = () => {
+      capture.reset();
+      (input.dataset.shortcutSlot === '1' ? settings.secondaryShortcuts : settings.shortcuts)[input.dataset.shortcutInput as ShortcutAction] = '';
+      saveShortcutEdits();
+    };
+    input.addEventListener('focus', () => capture.reset());
+    input.addEventListener('blur', () => capture.reset());
+    const button = input.parentElement!.querySelector<HTMLButtonElement>('.shortcut-clear')!;
+    button.addEventListener('pointerdown', event => event.preventDefault());
+    button.addEventListener('click', () => { clear(); input.focus({ preventScroll: true }); });
     input.addEventListener('keydown', (event) => {
       event.preventDefault();
       event.stopPropagation();
       if (event.key === 'Escape') {
+        capture.reset();
         setColorSampling(false);
         input.blur();
         return;
       }
+      if (event.key === 'Delete' && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey) { clear(); return; }
+      if (event.repeat) return;
       const shortcut = shortcutFromEvent(event);
       if (!shortcut) return;
       const action = input.dataset.shortcutInput as ShortcutAction;
-      const duplicate = shortcutActions.find(
-        (candidate) => candidate !== action && settings.shortcuts[candidate] === shortcut,
-      );
-      if (duplicate) {
-        toast(`快捷键 ${shortcut} 已被占用。`, 'warning');
-        return;
-      }
-      settings.shortcuts[action] = shortcut;
-      populateSettingsForm();
-      applySettings();
-      input.blur();
-    }),
-  );
+      (input.dataset.shortcutSlot === '1' ? settings.secondaryShortcuts : settings.shortcuts)[action] = capture.stroke(shortcut);
+      saveShortcutEdits();
+    });
+  });
   element('#resetShortcutsBtn').addEventListener('click', () => {
     settings.shortcuts = { ...defaultSettings.shortcuts };
+    settings.secondaryShortcuts = { ...defaultSettings.secondaryShortcuts };
     populateSettingsForm();
     applySettings();
   });
@@ -2475,7 +2488,7 @@ function runShortcutAction(action: ShortcutAction): void {
   }
   if (action === 'newModel') requestNewModel();
   else if (action === 'openModel') void openFile('model');
-  else if (action === 'overwrite') void overwriteModel();
+  else if (action === 'overwrite') void (currentFilePath && !currentFilePath.startsWith('untitled:') ? overwriteModel() : saveModelAs());
   else if (action === 'saveAs') void saveModelAs();
   else if (action === 'undo') undo();
   else if (action === 'redo') redo();
@@ -2516,7 +2529,7 @@ window.addEventListener(
     }
     if (target.closest('input, select, textarea')) return;
     const stroke = shortcutFromEvent(event); if (!stroke) return;
-    const match = matchShortcut(settings.shortcuts, stroke, shortcutChord); shortcutChord = '';
+    const match = matchShortcut(settings.shortcuts, stroke, shortcutChord, settings.secondaryShortcuts); shortcutChord = '';
     if (match.prefix) {
       event.preventDefault(); shortcutChord = match.prefix;
       clearTimeout(shortcutChordTimer); shortcutChordTimer = setTimeout(() => { shortcutChord = ''; }, 2000); return;

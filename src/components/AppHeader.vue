@@ -13,11 +13,11 @@
           </button>
           <button id="overwriteBtn" role="menuitem" disabled>
             <span><strong>保存</strong></span
-            ><kbd data-shortcut-label="overwrite">Ctrl Alt S</kbd>
+            ><kbd data-shortcut-label="overwrite">Ctrl S</kbd>
           </button>
           <button id="saveAsBtn" role="menuitem" disabled>
             <span><strong>另存为</strong></span
-            ><kbd data-shortcut-label="saveAs">Ctrl S</kbd>
+            ><kbd data-shortcut-label="saveAs">Ctrl Alt S</kbd>
           </button>
           <button id="closeModelTabBtn" role="menuitem"><span>关闭</span><kbd data-shortcut-label="closeTab">Ctrl+F4</kbd></button>
           <button id="closeAllModelTabsBtn" role="menuitem"><span>全部关闭</span><kbd data-shortcut-label="closeAll">Ctrl+K W</kbd></button>
