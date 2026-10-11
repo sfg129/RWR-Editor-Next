@@ -75,7 +75,7 @@ const shortcuts = orderedShortcuts(loadSettings().shortcuts);
               <div class="brand-mark large"><span /><span /><span /></div>
               <div>
                 <strong>RWR 体素编辑器 Next</strong>
-                <p>版本 0.8.1</p>
+                <p>版本 0.8.3</p>
               </div>
             </div>
             <a
