@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { withFileDialog } from './file-dialog';
 import type { ModelWorkspace, WorkspaceEntry } from '../core/workspace/model-workspace';
 
 export type InvokeCommand = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
@@ -31,13 +32,13 @@ export function createDesktopBridge(invokeCommand: InvokeCommand = invoke): {
 } {
   return {
     isAvailable: () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window,
-    openTextFile: (kind) => invokeCommand<OpenedTextFile | null>('open_text_file', { kind }),
+    openTextFile: (kind) => withFileDialog(() => invokeCommand<OpenedTextFile | null>('open_text_file', { kind })),
     openDroppedTextFile: (path) => invokeCommand<OpenedTextFile>('open_dropped_text_file', { path }),
     takeStartupTextFile: () => invokeCommand<OpenedTextFile | null>('take_startup_text_file'),
     saveTextFile: (defaultName, text) =>
-      invokeCommand<SavedTextFile | null>('save_text_file', { defaultName, text }),
+      withFileDialog(() => invokeCommand<SavedTextFile | null>('save_text_file', { defaultName, text })),
     overwriteTextFile: (path, text) => invokeCommand<SavedTextFile>('overwrite_text_file', { path, text }),
-    chooseWorkspace: () => invokeCommand<ModelWorkspace | null>('choose_model_workspace'),
+    chooseWorkspace: () => withFileDialog(() => invokeCommand<ModelWorkspace | null>('choose_model_workspace')),
     scanWorkspace: path => invokeCommand<ModelWorkspace>('scan_model_workspace', { path }),
     listWorkspaceDir: path => invokeCommand<WorkspaceEntry[]>('list_model_workspace_dir', { path }),
     loadSession: () => invokeCommand<string | null>('load_editor_session'),

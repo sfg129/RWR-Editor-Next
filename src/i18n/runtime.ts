@@ -1,3 +1,4 @@
+import { displayPath } from '../core/editor/display-path';
 import type { AppLanguage } from './languages';
 import { messageKey, translations } from './translations';
 import { dynamicTranslations } from './dynamic-translations';
@@ -382,6 +383,7 @@ function lookupKey(value: string): string {
 }
 
 export function translate(source: string, target: AppLanguage = 'en'): string {
+  source = displayPath(source);
   if (target === 'zh-CN') return source.trim();
   const content = normalized(source);
   const localized = translations.get(lookupKey(content))?.[target];

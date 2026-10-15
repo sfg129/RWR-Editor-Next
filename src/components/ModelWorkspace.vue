@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { displayPath } from '../core/editor/display-path';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { documentWorkspace } from '../editor/document-workspace';
 import { desktopBridge } from '../platform/desktop-api';
@@ -85,9 +86,9 @@ onMounted(async () => {
 <template>
   <aside class="model-workspace" :class="{ collapsed: !width }" :inert="!width">
     <header><strong>工作区</strong><button class="button" :disabled="busy" @click="choose">打开文件夹</button></header>
-    <div v-if="workspace" class="workspace-root" :title="workspace.root" data-no-localize>{{ workspace.root }}</div>
+    <div v-if="workspace" class="workspace-root" :title="displayPath(workspace.root)" data-no-localize>{{ displayPath(workspace.root) }}</div>
     <div ref="tree" class="workspace-tree">
-      <button v-for="row in rows" :key="row.entry.path" class="workspace-entry" :class="{ directory: row.entry.isDirectory, other: !row.entry.isDirectory && !row.entry.isModel, active: pathKey(row.entry.path) === pathKey(documentWorkspace.activePath) }" :style="{ paddingLeft: 9 + row.depth * 14 + 'px' }" :title="row.entry.path" :disabled="!row.entry.isDirectory && !row.entry.isModel" @click="activate(row.entry)">
+      <button v-for="row in rows" :key="row.entry.path" class="workspace-entry" :class="{ directory: row.entry.isDirectory, other: !row.entry.isDirectory && !row.entry.isModel, active: pathKey(row.entry.path) === pathKey(documentWorkspace.activePath) }" :style="{ paddingLeft: 9 + row.depth * 14 + 'px' }" :title="displayPath(row.entry.path)" :disabled="!row.entry.isDirectory && !row.entry.isModel" @click="activate(row.entry)">
         <span>{{ row.entry.isDirectory ? expanded.has(row.entry.path) ? '▾' : '▸' : '◇' }}</span><span data-no-localize>{{ row.entry.name }}</span>
       </button>
     </div>

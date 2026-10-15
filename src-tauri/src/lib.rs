@@ -12,6 +12,11 @@ use tauri_plugin_dialog::{DialogExt, FilePath};
 const APP_NAME: &str = "RWR 体素编辑器 Next";
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+fn owned_file_dialog(app: &AppHandle) -> Result<tauri_plugin_dialog::FileDialogBuilder<tauri::Wry>, String> {
+    let owner = app.get_webview_window("main").ok_or_else(|| "主窗口已关闭".to_string())?;
+    Ok(app.dialog().file().set_parent(&owner))
+}
+
 struct EditorFileState {
     writable_xml_paths: Mutex<HashSet<PathBuf>>,
     startup_xml_path: Mutex<Option<PathBuf>>,
@@ -118,8 +123,7 @@ fn read_xml_file(
 
 async fn pick_xml_file(app: &AppHandle) -> Result<Option<FilePath>, String> {
     let (sender, mut receiver) = tauri::async_runtime::channel(1);
-    app.dialog()
-        .file()
+    owned_file_dialog(app)?
         .add_filter("RWR XML 文件", &["xml"])
         .pick_file(move |selected| {
             let _ = sender.try_send(selected);
@@ -135,8 +139,7 @@ async fn choose_xml_save_path(
     default_name: &str,
 ) -> Result<Option<FilePath>, String> {
     let (sender, mut receiver) = tauri::async_runtime::channel(1);
-    app.dialog()
-        .file()
+    owned_file_dialog(app)?
         .add_filter("RWR XML 文件", &["xml"])
         .set_file_name(default_name)
         .save_file(move |selected| {
@@ -285,7 +288,7 @@ fn list_model_workspace_dir(path: String) -> Result<Vec<ModelWorkspaceEntry>, St
 #[tauri::command]
 async fn choose_model_workspace(app: AppHandle) -> Result<Option<ModelWorkspace>, String> {
     let (sender, mut receiver) = tauri::async_runtime::channel(1);
-    app.dialog().file().pick_folder(move |selected| { let _ = sender.try_send(selected); });
+    owned_file_dialog(&app)?.pick_folder(move |selected| { let _ = sender.try_send(selected); });
     let selected = receiver.recv().await.ok_or_else(|| "Folder chooser closed".to_string())?;
     selected.map(|file| file.as_path().ok_or_else(|| "Not a local folder".to_string()).and_then(|path| model_workspace(path.to_path_buf()))).transpose()
 }

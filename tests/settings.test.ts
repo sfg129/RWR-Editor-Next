@@ -7,6 +7,7 @@ describe('editor settings', () => {
   it('uses readable text and editor defaults', () => {
     const settings = loadSettings();
     expect(settings.fontSize).toBe(16);
+    expect(settings.accent).toBe('#74a5c3');
     expect(settings.language).toBe('zh-CN');
     expect(settings.antialias).toBe(true);
     expect('rotationMode' in settings).toBe(false);
@@ -30,6 +31,13 @@ describe('editor settings', () => {
   it('applies the selected font size to the document', () => {
     applySettingsToDocument({ ...defaultSettings, fontSize: 20 });
     expect(document.documentElement.style.getPropertyValue('--font-size')).toBe('20px');
+  });
+  it('migrates only the old default accent and applies custom derived colors', () => {
+    localStorage.setItem('rwr-editor-settings-v1', JSON.stringify({ accent: '#f0b84b' }));
+    expect(loadSettings().accent).toBe('#74a5c3');
+    localStorage.setItem('rwr-editor-settings-v1', JSON.stringify({ accent: '#228844' }));
+    const settings = loadSettings(); expect(settings.accent).toBe('#228844'); applySettingsToDocument(settings);
+    expect(document.documentElement.style.getPropertyValue('--accent-rgb')).toBe('34, 136, 68');
   });
 
   it('forces removed settings to their fixed defaults without losing supported preferences', () => {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { displayPath } from '../core/editor/display-path';
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { documentWorkspace as workspace } from '../editor/document-workspace';
 import { desktopBridge } from '../platform/desktop-api';
@@ -37,7 +38,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', dismiss));
 </script>
 <template>
   <div ref="bar" class="document-tabs" role="tablist" aria-label="模型标签页">
-    <div v-for="tab in workspace.tabs" :key="tab.id" class="document-tab" :class="{ active: tab.id === workspace.activeId, preview: tab.preview, pinned: tab.pinned, dirty: tab.dirty }" :title="tab.path" @contextmenu="context($event, tab.id)" @auxclick="$event.button === 1 && workspace.close(tab.id)">
+    <div v-for="tab in workspace.tabs" :key="tab.id" class="document-tab" :class="{ active: tab.id === workspace.activeId, preview: tab.preview, pinned: tab.pinned, dirty: tab.dirty }" :title="displayPath(tab.path)" @contextmenu="context($event, tab.id)" @auxclick="$event.button === 1 && workspace.close(tab.id)">
       <button role="tab" :aria-selected="tab.id === workspace.activeId" :disabled="workspace.busy || !workspace.ready" @click="workspace.activate(tab.id)" @dblclick="workspace.keepOpen(tab.id)"><span data-no-localize>{{ tab.name }}</span></button>
       <button class="document-tab-close" :disabled="workspace.busy" :aria-label="localized(tab.pinned ? '取消固定' : '关闭')" @click="tab.pinned ? workspace.pin(tab.id) : workspace.close(tab.id)">
         <svg v-if="tab.pinned" class="tab-pin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.15" aria-hidden="true"><path d="m9.5 1.5 5 5-1.8 1.1-1.1 3.2-2.2-.7-3.1-3.1-.7-2.2 3.2-1.1zM7.9 8.1 2.3 13.7"/></svg>

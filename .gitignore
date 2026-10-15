@@ -6,6 +6,8 @@ node_modules/
 dist/
 release/
 src-tauri/target/
+src-tauri/target-*/
+src-tauri/gen/
 
 # Editors and operating systems
 .idea/
@@ -17,6 +19,34 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+*.bak1
+*.bak.*
+*.swp
+*.lnk
+.env
+.env.*
+!.env.example
+coverage/
+.vitest/
+*.tsbuildinfo
+Desktop.ini
+
+# Local development notes, generated prompts and workspace state
+/docs/
+/assets/*-prompt.txt
+/.codex/
+/.agents/
+/work/
+/outputs/
+/tmp/
+/temp/
+
+# Release artifacts belong on GitHub Releases, not in source control
+/*.exe
+/*.zip
+/*.dmg
+/*.AppImage
+/*.deb
 
 # Local RWR assets used for manual compatibility checks
 /*.xml

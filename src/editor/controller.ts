@@ -1,3 +1,4 @@
+import { displayPath } from '../core/editor/display-path';
 import * as THREE from 'three';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ModelTabsController, type ModelTabState } from './model-tabs-controller';
@@ -31,7 +32,7 @@ import type {
 } from '../core/types';
 import { desktopBridge } from '../platform/desktop-api';
 import { CharacterPreviewController } from './character-preview';
-import { FileDialogGate } from './file-dialog-gate';
+import { fileDialogGate } from '../platform/file-dialog';
 import { isAppLanguage, languageChangeEvent } from '../i18n/languages';
 import { isTextEntryTarget, releasePressedActions } from './focus-policy';
 import { normalizeScreenRect, rectangleOverlapRatio, type ScreenRect } from './marquee-selection';
@@ -99,7 +100,6 @@ const saveAsBtn = element<HTMLButtonElement>('#saveAsBtn');
 const skeletonToggle = element<HTMLInputElement>('#skeletonToggle');
 const modelFileInput = element<HTMLInputElement>('#modelFileInput');
 const animationFileInput = element<HTMLInputElement>('#animationFileInput');
-const fileDialogInteractionGuard = element<HTMLDivElement>('#fileDialogInteractionGuard');
 const animationSelect = element<HTMLSelectElement>('#animationSelect');
 const animationDropdown = new SearchableAnimationDropdown(element<HTMLElement>('#animationDropdown'));
 const animationPlayBtn = element<HTMLButtonElement>('#animationPlayBtn');
@@ -168,11 +168,6 @@ let activeAnimation: RwrAnimation | null = null;
 let animationPlaying = false;
 let animationElapsed = 0;
 let animationRig: VoxelAnimationRig | null = null;
-const fileDialogGate = new FileDialogGate((active) => {
-  fileDialogInteractionGuard.classList.toggle('hidden', !active);
-  fileDialogInteractionGuard.setAttribute('aria-hidden', String(!active));
-  document.documentElement.classList.toggle('file-dialog-open', active);
-});
 let animationDirty = false;
 let currentAnimationFileName = 'animations.xml';
 let selectedFrameIndex = 0;
@@ -325,7 +320,7 @@ new ResizeObserver(resizeRenderer).observe(viewport);
 resizeRenderer();
 
 function setStatus(message: string, type: 'normal' | 'success' | 'warning' = 'normal'): void {
-  statusText.textContent = message;
+    statusText.textContent = displayPath(message);
   const dot = element<HTMLElement>('.status-dot');
   dot.dataset.state = type;
 }
@@ -724,7 +719,7 @@ function loadModelText(text: string, name: string, path = ''): void {
     undoStack = [];
     redoStack = [];
     modelName.textContent = name;
-    modelPath.textContent = path;
+    modelPath.textContent = displayPath(path);
     rebuildVoxelMesh();
     renderAnimationPose();
     frameModel();
@@ -1524,19 +1519,16 @@ async function openFile(kind: 'model' | 'animation'): Promise<void> {
     !window.confirm(localized('当前动画有未导出修改。确定放弃并载入其他动画文件吗？'))
   )
     return;
-  if (!fileDialogGate.tryOpen()) return;
+  if (fileDialogGate.isOpen()) return;
   releaseCameraInput();
   closeFileMenu();
   if (desktopBridge.isAvailable()) {
-    try {
-      const result = await desktopBridge.openTextFile(kind);
-      if (!result) return;
-      if (kind === 'model') loadModelText(result.text, result.name, result.path);
-      else loadAnimationText(result.text, result.name);
-    } finally {
-      fileDialogGate.close();
-    }
+    const result = await desktopBridge.openTextFile(kind);
+    if (!result) return;
+    if (kind === 'model') loadModelText(result.text, result.name, result.path);
+    else loadAnimationText(result.text, result.name);
   } else {
+    if (!fileDialogGate.tryOpen()) return;
     const input = kind === 'model' ? modelFileInput : animationFileInput;
     try {
       input.value = '';
@@ -1561,7 +1553,7 @@ async function saveModelAs(): Promise<boolean> {
       currentFileName = result.name;
       currentFilePath = result.path;
       modelName.textContent = result.name;
-      modelPath.textContent = result.path;
+      modelPath.textContent = displayPath(result.path);
       model.dirty = false;
       updateStats();
       toast(`已另存为：${result.name}`, 'success');
@@ -1596,7 +1588,7 @@ function closeOverwriteModal(confirmed: boolean): void {
 
 function requestOverwriteConfirmation(): Promise<boolean> {
   if (!settings.confirmOverwrite) return Promise.resolve(true);
-  element<HTMLElement>('#overwritePath').textContent = `即将替换：${currentFilePath}`;
+  element<HTMLElement>('#overwritePath').textContent = `即将替换：${displayPath(currentFilePath)}`;
   overwriteConfirmCheck.checked = false;
   confirmOverwriteBtn.disabled = true;
   overwriteModal.classList.remove('hidden');
@@ -2573,7 +2565,7 @@ modelTabs = new ModelTabsController({
     ++modelOpenToken; releaseCameraInput(); animationPlaying = false; setColorSampling(false);
     model = state?.model ?? null; currentFileName = state?.name ?? ''; currentFilePath = state?.path ?? '';
     undoStack = state?.undo ?? []; redoStack = state?.redo ?? []; selectedIds = new Set(state?.selected ?? []);
-    modelName.textContent = currentFileName || '—'; modelPath.textContent = currentFilePath.startsWith('untitled:') ? '' : currentFilePath;
+    modelName.textContent = currentFileName || '—'; modelPath.textContent = currentFilePath.startsWith('untitled:') ? '' : displayPath(currentFilePath);
     rebuildVoxelMesh(); renderAnimationPose();
     if (state && (state.camera.x || state.camera.y || state.camera.z)) {
       camera.position.set(state.camera.x, state.camera.y, state.camera.z);

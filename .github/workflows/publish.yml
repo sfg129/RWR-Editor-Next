@@ -118,7 +118,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.platform }}
-          path: RWR-Editor-Next-*
+          path: |
+            RWR-Editor-Next-*-portable.exe
+            RWR-Editor-Next-*-x64-setup.exe
+            RWR-Editor-Next-*-macos-universal.app.zip
+            RWR-Editor-Next-*-macos-universal.dmg
+            RWR-Editor-Next-*-linux-x64.AppImage
+            RWR-Editor-Next-*-linux-x64.deb
           if-no-files-found: error
 
   finalize-release:
@@ -147,4 +153,17 @@ jobs:
             echo "No release assets found" >&2
             exit 1
           fi
+          VERSION="${RELEASE_TAG#v}"
+          if [ "${#assets[@]}" -ne 6 ]; then
+            echo "Expected exactly six application artifacts" >&2
+            exit 1
+          fi
+          for asset in "${assets[@]}"; do
+            case "$(basename "$asset")" in
+              "RWR-Editor-Next-${VERSION}-portable.exe" | "RWR-Editor-Next-${VERSION}-x64-setup.exe" | \
+              "RWR-Editor-Next-${VERSION}-macos-universal.app.zip" | "RWR-Editor-Next-${VERSION}-macos-universal.dmg" | \
+              "RWR-Editor-Next-${VERSION}-linux-x64.AppImage" | "RWR-Editor-Next-${VERSION}-linux-x64.deb") ;;
+              *) echo "Unexpected release artifact: $asset" >&2; exit 1 ;;
+            esac
+          done
           gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber

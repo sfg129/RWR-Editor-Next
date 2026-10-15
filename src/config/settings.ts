@@ -35,7 +35,7 @@ export const defaultSettings: EditorSettings = {
   autosave: true,
   confirmDelete: false,
   confirmOverwrite: false,
-  accent: '#f0b84b',
+  accent: '#74a5c3',
   brightness: 100,
   uiScale: 100,
   fontSize: 16,
@@ -83,6 +83,7 @@ export function loadSettings(): EditorSettings {
       ...fixedSettings,
       language: isAppLanguage(stored.language) ? stored.language : 'zh-CN',
       theme: stored.theme === 'light' ? 'light' : 'dark',
+      accent: /^#[0-9a-f]{6}$/i.test(stored.accent ?? '') && stored.accent?.toLowerCase() !== '#f0b84b' ? stored.accent! : defaultSettings.accent,
       lightingPreset: stored.lightingPreset === 'color' ? 'color' : 'standard',
       fontSize:
         typeof stored.fontSize === 'number' && Number.isFinite(stored.fontSize)
@@ -104,6 +105,7 @@ export function applySettingsToDocument(settings: EditorSettings): void {
   const root = document.documentElement;
   root.dataset.theme = settings.theme;
   root.style.setProperty('--accent', settings.accent);
+  root.style.setProperty('--accent-rgb', [1, 3, 5].map(index => parseInt(settings.accent.slice(index, index + 2), 16)).join(', '));
   root.style.setProperty('--app-brightness', `${settings.brightness}%`);
   root.style.setProperty('--ui-scale', String(settings.uiScale / 100));
   root.style.setProperty('--font-size', `${settings.fontSize}px`);

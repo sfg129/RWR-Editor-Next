@@ -4,8 +4,8 @@
  * interaction colour. Red and green are reserved for semantic feedback.
  */
 :root {
-  --accent: #f0b84b;
-  --accent-rgb: 240, 184, 75;
+  --accent: #74a5c3;
+  --accent-rgb: 116, 165, 195;
   --bg: #0b0d0f;
   --surface-0: #101316;
   --surface-1: #15191d;

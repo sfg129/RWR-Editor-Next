@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark;
-  --accent: #e6b85c;
-  --accent-rgb: 230, 184, 92;
+  --accent: #74a5c3;
+  --accent-rgb: 116, 165, 195;
   --app-brightness: 100%;
   --ui-scale: 1;
   --font-size: 16px;
@@ -1872,37 +1872,6 @@ input[type='range'] {
 .preview-status:empty,
 .animation-note:empty {
   display: none;
-}
-.file-dialog-interaction-guard {
-  position: fixed;
-  inset: 0;
-  z-index: 300;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 12px;
-  background: rgba(5, 6, 8, 0.5);
-  color: var(--text);
-  font-size: 0.76rem;
-  letter-spacing: 0.04em;
-  backdrop-filter: blur(2px);
-  cursor: wait;
-}
-.file-dialog-interaction-guard.hidden {
-  display: none;
-}
-.file-dialog-spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border-light);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: file-dialog-spin 0.75s linear infinite;
-}
-@keyframes file-dialog-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 .modal-backdrop {
   position: fixed;
