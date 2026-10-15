@@ -49,6 +49,35 @@ const TORSO_MODEL = `<?xml version="1.0" encoding="UTF-8"?>
 </model>`;
 
 describe('RWR model compatibility', () => {
+  it('restores saved status after undo, inverse edits and painting the original color', () => {
+    const model = RwrModel.parse(MODEL), original = model.snapshot();
+    const id = model.voxels[0]!.id, ids = new Set([id]);
+    expect(model.dirty).toBe(false);
+    model.paint(ids, { r: 1, g: 0, b: 0 }); expect(model.dirty).toBe(false);
+    model.paint(ids, { r: 0.2, g: 0.3, b: 0.4 }); expect(model.dirty).toBe(true);
+    const changed = model.snapshot(); model.restore(original); expect(model.dirty).toBe(false);
+    model.restore(changed); expect(model.dirty).toBe(true);
+    model.paint(ids, { r: 1, g: 0, b: 0 }); expect(model.dirty).toBe(false);
+    model.move(ids, { x: 0, y: 1, z: 0 }); expect(model.dirty).toBe(true);
+    model.move(ids, { x: 0, y: -1, z: 0 }); expect(model.dirty).toBe(false);
+  });
+  it('compares exported data rather than temporary voxel identities', () => {
+    const model = RwrModel.createNew(1), voxel = { ...model.voxels[0]! }, originalXml = model.serialize();
+    model.remove(new Set([voxel.id])); expect(model.dirty).toBe(true);
+    const added = model.addVoxel({ x: voxel.x, y: voxel.y, z: voxel.z }, voxel)!; expect(added.id).not.toBe(voxel.id);
+    expect(model.serialize()).toBe(originalXml); expect(model.dirty).toBe(false);
+    model.paint(new Set([added.id]), { r: voxel.r + 1e-9, g: voxel.g, b: voxel.b });
+    expect(model.serialize()).toBe(originalXml); expect(model.dirty).toBe(false);
+  });
+  it('tracks a newly saved baseline through undo and redo, including binding-only changes', () => {
+    const model = RwrModel.parse(MODEL), original = model.snapshot();
+    model.bindings[0]!.voxelIds.delete(model.voxels[0]!.id); model.dirty = true;
+    expect(model.dirty).toBe(true); const saved = model.snapshot(); model.markSaved();
+    expect(model.dirty).toBe(false); model.restore(original); expect(model.dirty).toBe(true);
+    model.restore(saved); expect(model.dirty).toBe(false);
+    const baseline = model.savedSnapshot(); baseline.voxels.length = 0;
+    expect(model.savedSnapshot().voxels).toHaveLength(2);
+  });
   it('creates a truly empty editable file by default', () => {
     const empty = RwrModel.createNew();
     expect(empty.voxels).toEqual([]);

@@ -7,7 +7,7 @@ export interface ModelTabState {
   name: string; path: string; model: RwrModel; undo: EditorSnapshot[]; redo: EditorSnapshot[]; selected: string[];
   camera: Vec3; target: Vec3;
 }
-interface StoredTab { id: string; preview: boolean; pinned: boolean; name: string; path: string; source: string; snapshot: EditorSnapshot; dirty: boolean; undo: EditorSnapshot[]; redo: EditorSnapshot[]; selected: string[]; camera: Vec3; target: Vec3 }
+interface StoredTab { id: string; preview: boolean; pinned: boolean; name: string; path: string; source: string; snapshot: EditorSnapshot; savedSnapshot?: EditorSnapshot; dirty: boolean; undo: EditorSnapshot[]; redo: EditorSnapshot[]; selected: string[]; camera: Vec3; target: Vec3 }
 const sessionKey = 'rwr-editor.session.v1';
 const dirty = (state: ModelTabState) => state.model.dirty;
 export class ModelTabsController {
@@ -90,7 +90,7 @@ export class ModelTabsController {
     clearTimeout(this.timer); this.remember();
     const tabs: StoredTab[] = this.tabs.map(tab => {
       const state = tab.state;
-      return { id: tab.id, preview: tab.preview, pinned: !!tab.pinned, name: state.name, path: state.path, source: state.model.sourceText, snapshot: state.model.snapshot(), dirty: state.model.dirty, undo: state.undo, redo: state.redo, selected: state.selected, camera: state.camera, target: state.target };
+      return { id: tab.id, preview: tab.preview, pinned: !!tab.pinned, name: state.name, path: state.path, source: state.model.sourceText, snapshot: state.model.snapshot(), savedSnapshot: state.model.savedSnapshot(), dirty: state.model.dirty, undo: state.undo, redo: state.redo, selected: state.selected, camera: state.camera, target: state.target };
     });
     const text = JSON.stringify({ version: 1, activeId: this.activeId, tabs, extras: this.adapter.captureExtras() });
     this.writes = this.writes.catch(() => {}).then(async () => {
@@ -107,10 +107,16 @@ export class ModelTabsController {
       const restored: DocumentTab<ModelTabState>[] = [];
       for (const tab of session.tabs) {
         if (![tab.id, tab.name, tab.path, tab.source].every(value => typeof value === 'string') || !Array.isArray(tab.undo) || !Array.isArray(tab.redo) || !Array.isArray(tab.selected)) throw new Error('Invalid editor tab');
-        const model = RwrModel.parse(tab.source); model.restore(tab.snapshot); model.dirty = !!tab.dirty;
+        const model = RwrModel.parse(tab.source);
+        if (tab.savedSnapshot) model.markSaved(tab.savedSnapshot);
+        else if (!tab.dirty) model.markSaved(tab.snapshot);
+        model.restore(tab.snapshot);
         restored.push({ id: tab.id, preview: !!tab.preview, pinned: !!tab.pinned, state: { name: tab.name, path: tab.path, model, undo: tab.undo, redo: tab.redo, selected: tab.selected, camera: tab.camera, target: tab.target } });
         if (desktopBridge.isAvailable() && !tab.path.startsWith('untitled:')) {
-          try { await desktopBridge.openDroppedTextFile(tab.path); } catch { /* Keep edits; Save As remains available. */ }
+          try {
+            const disk = await desktopBridge.openDroppedTextFile(tab.path);
+            if (!tab.savedSnapshot && tab.dirty) model.markSaved(RwrModel.parse(disk.text).snapshot());
+          } catch { /* Keep edits; Save As remains available. */ }
         }
       }
       this.tabs = restored; this.adapter.restoreExtras(session.extras);

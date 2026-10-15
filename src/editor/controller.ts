@@ -34,7 +34,8 @@ import { desktopBridge } from '../platform/desktop-api';
 import { CharacterPreviewController } from './character-preview';
 import { fileDialogGate } from '../platform/file-dialog';
 import { isAppLanguage, languageChangeEvent } from '../i18n/languages';
-import { isTextEntryTarget, releasePressedActions } from './focus-policy';
+import { isNativeControlTarget, isTextEntryTarget } from './focus-policy';
+import { HeldActions } from './held-actions';
 import { normalizeScreenRect, rectangleOverlapRatio, type ScreenRect } from './marquee-selection';
 import { exceedsPointerDragThreshold } from './pointer-gesture';
 import {
@@ -181,7 +182,7 @@ let closeTabResolver: ((decision: 'save' | 'discard' | 'cancel') => void) | null
 let modelTabs: ModelTabsController | undefined;
 let modelOpenToken = 0;
 let modelSaving = false;
-const pressedCameraActions = new Set<ShortcutAction>();
+const pressedCameraActions = new HeldActions<ShortcutAction>();
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x11141a);
@@ -289,7 +290,7 @@ function releaseCameraLook(pointerId?: number): boolean {
 }
 
 function releaseCameraInput(): void {
-  releasePressedActions(pressedCameraActions);
+  pressedCameraActions.clear();
   shiftHeld = false;
   releaseCameraLook();
   if (voxelStroke) finishVoxelStroke(voxelStroke.pointerId);
@@ -660,7 +661,7 @@ function updateStats(): void {
   unboundCount.textContent = String(model ? model.voxels.filter((voxel) => !bound.has(voxel.id)).length : 0);
   dirtyState.textContent = !model ? '未加载' : model.dirty ? '有未保存修改' : '已载入';
   dirtyState.classList.toggle('dirty', Boolean(model?.dirty));
-  fileState.textContent = !model ? '—' : model.dirty ? '已修改' : currentFilePath ? '已保存' : '未命名';
+  fileState.textContent = !model ? '—' : model.dirty ? '已修改' : currentFilePath && !currentFilePath.startsWith('untitled:') ? '已保存' : '未命名';
   selectionSummary.textContent = selectedIds.size ? `已选择 ${selectedIds.size} 个体素` : '未选择体素';
   const selected = model?.voxels.filter((voxel) => selectedIds.has(voxel.id)) ?? [];
   if (selected.length === 1) {
@@ -1622,7 +1623,7 @@ function createNewModel(announce = true): void {
     if (documentWorkspace.busy) return;
     const existingNames = new Set(modelTabs.tabs.map(tab => tab.state.name));
     let index = 1; while (existingNames.has('Untitled-' + index + '.xml')) index++;
-    modelTabs.open({ name: 'Untitled-' + index + '.xml', path: 'untitled://' + crypto.randomUUID(), model: RwrModel.createNew(), undo: [], redo: [], selected: [], camera: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 } }, true);
+    modelTabs.open({ name: 'Untitled-' + index + '.xml', path: 'untitled://' + crypto.randomUUID(), model: RwrModel.createNew(), undo: [], redo: [], selected: [], camera: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 } }, announce);
     setTool(announce ? 'sculpt' : 'select'); if (announce) toast('新模型已创建。', 'success');
     return;
   }
@@ -2490,6 +2491,7 @@ function runShortcutAction(action: ShortcutAction): void {
 window.addEventListener(
   'keydown',
   (event) => {
+    pressedCameraActions.reconcile(event);
     if (document.getElementById('languageSelectionModal')) return;
     if (fileDialogGate.isOpen()) {
       event.preventDefault();
@@ -2516,7 +2518,7 @@ window.addEventListener(
     const cameraAction = cameraShortcutActionForEvent(event);
     if (cameraAction && !isTextEntryTarget(target) && !target.closest('[data-shortcut-input]')) {
       event.preventDefault();
-      pressedCameraActions.add(cameraAction);
+      pressedCameraActions.press(event, cameraAction);
       return;
     }
     if (target.closest('input, select, textarea')) return;
@@ -2537,12 +2539,17 @@ window.addEventListener(
   'keyup',
   (event) => {
     if (event.key === 'Shift') shiftHeld = false;
-    const action = cameraShortcutActionForEvent(event);
-    if (action) pressedCameraActions.delete(action);
+    pressedCameraActions.release(event);
   },
   { capture: true },
 );
 window.addEventListener('blur', releaseCameraInput);
+document.addEventListener('focusin', event => {
+  if (isNativeControlTarget(event.target)) releaseCameraInput();
+});
+document.addEventListener('pointerdown', event => {
+  if (isNativeControlTarget(event.target)) releaseCameraInput();
+}, { capture: true });
 window.addEventListener(languageChangeEvent, (event) => {
   const language = (event as CustomEvent<unknown>).detail;
   if (isAppLanguage(language)) {

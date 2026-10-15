@@ -291,7 +291,7 @@ kbd {
 .document-tab.active { background: var(--surface-1); border-top-color: var(--accent); }
 .document-tab > button { background: transparent; border: 0; border-radius: 0; padding: 4px 10px; min-height: 30px; color: var(--muted); cursor: pointer; font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .document-tab.active > button { color: var(--text); }
-.document-tab.preview > button[role=tab] { font-style: italic; }
+.document-tab.preview > button[role=tab], .document-tab.preview > button[role=tab] > span { font-style: italic; font-synthesis: style; }
 .document-tab > .document-tab-close { width: 28px; flex: 0 0 28px; padding: 3px; }
 .tab-pin { display: inline-block; vertical-align: middle; width: 16px; height: 16px; color: #c4c8cb; }
 .tab-dirty-dot { display: inline-block; vertical-align: middle; width: 8px; height: 8px; border-radius: 50%; background: #c4c8cb; }

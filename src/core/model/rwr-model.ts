@@ -43,6 +43,19 @@ function cloneVoxel(voxel: Voxel): Voxel {
   return { ...voxel };
 }
 
+function cloneSnapshot(snapshot: EditorSnapshot): EditorSnapshot {
+  return { voxels: snapshot.voxels.map(cloneVoxel), bindings: snapshot.bindings.map(group => ({ constraintIndex: group.constraintIndex, voxelIds: [...group.voxelIds] })) };
+}
+
+function contentSignature(voxels: Voxel[], bindings: Array<{ constraintIndex: number; voxelIds: Iterable<string> }>): string {
+  const indexes = new Map(voxels.map((voxel, index) => [voxel.id, index]));
+  // Match export precision and binding indexes, not temporary editor IDs.
+  return JSON.stringify([
+    voxels.map(v => [v.x, v.y, v.z].map(n => Number(formatNumber(n))).concat([v.r, v.g, v.b, v.a].map(n => Number(n.toFixed(6))))),
+    bindings.map(group => [group.constraintIndex, [...group.voxelIds].map(id => indexes.get(id)).filter((index): index is number => index !== undefined).sort((a, b) => a - b)]),
+  ]);
+}
+
 export class RwrModel {
   readonly sourceText: string;
   readonly document: XMLDocument;
@@ -51,7 +64,22 @@ export class RwrModel {
   readonly sticks: SkeletonStick[] = [];
   voxels: Voxel[] = [];
   bindings: BindingGroup[] = [];
-  dirty = false;
+  private savedState: EditorSnapshot = { voxels: [], bindings: [] };
+  private savedContent = '';
+  private currentContent: string | undefined;
+  get dirty(): boolean {
+    this.currentContent ??= contentSignature(this.voxels, this.bindings);
+    return this.currentContent !== this.savedContent;
+  }
+  set dirty(changed: boolean) {
+    if (changed) this.currentContent = undefined;
+    else this.markSaved();
+  }
+  markSaved(snapshot: EditorSnapshot = this.snapshot()): void {
+    this.savedState = cloneSnapshot(snapshot);
+    this.savedContent = contentSignature(snapshot.voxels, snapshot.bindings);
+  }
+  savedSnapshot(): EditorSnapshot { return cloneSnapshot(this.savedState); }
   private nextId = 1;
 
   private constructor(sourceText: string, document: XMLDocument, root: Element) {
@@ -116,6 +144,7 @@ export class RwrModel {
         model.bindings.push({ constraintIndex: intAttr(groupElement, 'constraintIndex'), voxelIds: ids });
       }
     }
+    model.markSaved();
     return model;
   }
 

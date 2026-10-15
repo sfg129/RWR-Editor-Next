@@ -9,7 +9,8 @@ import { SearchableAnimationDropdown } from './searchable-animation-dropdown';
 import { cameraRelativeMotion } from '../core/camera/camera-motion';
 import { RwrModel, parseAnimations } from '../core/model/rwr-model';
 import type { RwrAnimation } from '../core/types';
-import { isNativeControlTarget, isTextEntryTarget, releasePressedActions } from './focus-policy';
+import { isNativeControlTarget, isTextEntryTarget } from './focus-policy';
+import { HeldActions } from './held-actions';
 
 type NoticeKind = 'success' | 'warning' | 'normal';
 type LightingPreset = 'standard' | 'color';
@@ -108,7 +109,7 @@ export class CharacterPreviewController {
   private readonly posePosition = new THREE.Vector3();
   private readonly poseRotation = new THREE.Quaternion();
   private readonly poseScale = new THREE.Vector3(1, 1, 1);
-  private readonly pressed = new Set<CameraAction>();
+  private readonly pressed = new HeldActions<CameraAction>();
   private readonly resizeObserver: ResizeObserver;
   private model: RwrModel | null = null;
   private rig: VoxelAnimationRig | null = null;
@@ -321,6 +322,7 @@ export class CharacterPreviewController {
     window.addEventListener(
       'keydown',
       (event) => {
+        this.pressed.reconcile(event);
         if (!this.isOpen()) return;
         if (event.key === 'Escape') {
           event.preventDefault();
@@ -331,10 +333,10 @@ export class CharacterPreviewController {
         }
         if (event.key === 'Shift') this.shiftHeld = true;
         const action = this.cameraAction(event.code);
-        if (!action || isTextEntryTarget(event.target)) return;
+        if (!action || event.ctrlKey || event.altKey || event.metaKey || isTextEntryTarget(event.target)) return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (!this.fixedCameraInput.checked) this.pressed.add(action);
+        if (!this.fixedCameraInput.checked) this.pressed.press(event, action);
       },
       { capture: true },
     );
@@ -342,12 +344,14 @@ export class CharacterPreviewController {
       'keyup',
       (event) => {
         if (event.key === 'Shift') this.shiftHeld = false;
-        const action = this.cameraAction(event.code);
-        if (action) this.pressed.delete(action);
+        this.pressed.release(event);
       },
       { capture: true },
     );
     window.addEventListener('blur', () => this.releaseInput());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.releaseInput();
+    });
   }
 
   private cameraAction(code: string): CameraAction | null {
@@ -364,7 +368,7 @@ export class CharacterPreviewController {
   }
 
   private releaseInput(): void {
-    releasePressedActions(this.pressed);
+    this.pressed.clear();
     this.shiftHeld = false;
     this.rotatingModel = false;
     this.cameraLookActive = false;

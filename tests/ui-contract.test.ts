@@ -15,6 +15,13 @@ function uniqueMatches(source: string, pattern: RegExp): string[] {
 }
 
 describe('Vue editor DOM contract', () => {
+  it('allows preview-label italics even when the UI font has no italic face', async () => {
+    const skin = await Bun.file('src/styles/industrial.css').text();
+    // Bahnschrift has no italic face; the global font-synthesis:none would suppress it.
+    const previewRule = skin.match(/\.document-tab\.preview[^{}]*\{([^}]+)\}/)?.[1] ?? '';
+    expect(previewRule).toContain('font-style: italic');
+    expect(previewRule).toContain('font-synthesis: style');
+  });
   it('lists single-key tools and camera movement before common or complex shortcuts', async () => {
     const settings = await Bun.file('src/components/SettingsDialog.vue').text();
     expect(settings).toContain('orderedShortcuts(loadSettings().shortcuts)');
